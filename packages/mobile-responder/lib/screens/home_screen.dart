@@ -16,7 +16,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final dbRef = FirebaseDatabase.instance.ref("calls");
+  late DatabaseReference dbRef;
   List<Map<String, dynamic>> openCalls = [];
   List<Map<String, dynamic>> filteredCalls = [];
   bool _isLoading = true;
@@ -27,9 +27,142 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    debugPrint('[HomeScreen] initState 호출됨'); // initState 호출 확인
+    // 서버 우선 정책으로 데이터베이스 참조 설정
+    dbRef = FirebaseDatabase.instance.ref("calls");
+    dbRef.keepSynced(true); // 별도로 호출
+    debugPrint('[HomeScreen] initState 호출됨');
     _getCurrentPosition();
     _loadCalls();
+  }
+
+  // 스냅샷 데이터 처리 함수
+  void _processSnapshotData(DataSnapshot snapshot) {
+    debugPrint('[HomeScreen _processSnapshotData] 스냅샷 처리 시작');
+    try {
+      final data = snapshot.value;
+      debugPrint('[HomeScreen _processSnapshotData] 수신 데이터: $data');
+
+      if (data == null) {
+        debugPrint('[HomeScreen _processSnapshotData] 수신 데이터가 null입니다.');
+        if (mounted) {
+          setState(() {
+            openCalls = [];
+            _isLoading = false;
+            _applyFilters();
+          });
+        }
+        return;
+      }
+
+      // 기존 데이터 처리 로직을 여기에 복사
+      final Map<dynamic, dynamic> dataMap;
+      if (data is Map) {
+        dataMap = data;
+        // 각 call별로 개별 로그 출력
+        debugPrint(
+          '[HomeScreen _processSnapshotData] 수신 데이터 개수: ${dataMap.length}개',
+        );
+        dataMap.forEach((key, value) {
+          debugPrint('[HomeScreen _processSnapshotData] $key 원본: $value');
+        });
+      } else {
+        debugPrint(
+          '[HomeScreen _processSnapshotData] 데이터 형식이 Map이 아닙니다: $data',
+        );
+        if (mounted) {
+          setState(() {
+            openCalls = [];
+            _isLoading = false;
+            _applyFilters();
+          });
+        }
+        return;
+      }
+
+      // === 기존 데이터 파싱 로직 복사 ===
+      final List<Map<String, dynamic>> results = [];
+      debugPrint(
+        '[HomeScreen _processSnapshotData] dataMap 순회 시작, 총 ${dataMap.length}개 항목',
+      );
+
+      dataMap.forEach((key, value) {
+        try {
+          if (value is! Map) {
+            debugPrint(
+              '[HomeScreen _processSnapshotData] 항목 ($key) 데이터 형식이 Map이 아닙니다: $value',
+            );
+            return;
+          }
+
+          final Map<dynamic, dynamic> call = value;
+          final status = call['status']?.toString() ?? 'unknown';
+          final bool hasResponder = call['responder'] != null;
+          debugPrint(
+            '[HomeScreen _processSnapshotData] call $key 처리 중: status=$status, hasResponder=$hasResponder, eventType=${call['eventType']}, address=${call['address']}',
+          );
+
+          // call8만 특별히 상세 로그
+          if (key.toString() == 'call8') {
+            debugPrint(
+              '[HomeScreen _processSnapshotData] ⚠️ call8 상세 분석: 원본=$value, 파싱된 status=$status',
+            );
+          }
+
+          debugPrint(
+            '[HomeScreen _processSnapshotData] call null 상태 체크: status=$status, hasResponder=$hasResponder',
+          );
+
+          if (status == 'dispatched' &&
+              !hasResponder &&
+              status != 'completed') {
+            debugPrint(
+              '[HomeScreen _processSnapshotData] ✅ call $key 최종 필터 통과! 목록에 추가합니다. (${call['eventType']} - ${call['address']})',
+            );
+
+            final double lat = _safeDouble(call['lat'], 0.0);
+            final double lng = _safeDouble(call['lng'], 0.0);
+
+            results.add({
+              'id': key.toString(),
+              'eventType': call['eventType']?.toString() ?? '알 수 없음',
+              'address': call['address']?.toString() ?? '주소 없음',
+              'lat': lat,
+              'lng': lng,
+              'status': status,
+              'startAt': _safeInt(call['startAt'], 0),
+              'distance': 0.0,
+            });
+          } else {
+            debugPrint(
+              '[HomeScreen _processSnapshotData] ❌ call $key 최종 필터 미통과. (status: $status, hasResponder: $hasResponder, isCompleted: ${status == 'completed'}) - ${call['eventType']} ${call['address']}',
+            );
+          }
+        } catch (e) {
+          debugPrint(
+            '[HomeScreen _processSnapshotData] 항목 ($key) 처리 중 오류 발생: $e',
+          );
+        }
+      });
+
+      if (mounted) {
+        debugPrint(
+          '[HomeScreen _processSnapshotData] setState 호출 전, openCalls: ${results.length}개, isLoading: false',
+        );
+        setState(() {
+          openCalls = results;
+          _isLoading = false;
+          _applyFilters();
+        });
+        debugPrint('[HomeScreen _processSnapshotData] setState 호출 완료');
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen _processSnapshotData] 데이터 처리 중 전체 오류 발생: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -58,9 +191,26 @@ class _HomeScreenState extends State<HomeScreen> {
   void _loadCalls() {
     debugPrint('[HomeScreen _loadCalls] 함수 시작 - SIMPLIFIED_WITH_SETSTATE');
     _callsSubscription?.cancel();
+
+    // 서버에서 한 번 직접 최신 데이터 가져오기
+    dbRef
+        .once()
+        .then((event) {
+          debugPrint('[HomeScreen _loadCalls] 서버 직접 조회 완료');
+          if (event.snapshot.exists && mounted) {
+            // 서버 데이터로 즉시 업데이트
+            _processSnapshotData(event.snapshot);
+          }
+        })
+        .catchError((error) {
+          debugPrint('[HomeScreen _loadCalls] 서버 직접 조회 오류: $error');
+        });
+
+    // 실시간 리스너도 계속 유지
     _callsSubscription = dbRef.onValue.listen(
       (event) {
         debugPrint('[HomeScreen _loadCalls] Firebase 데이터 변경 감지! (리스너 콜백)');
+        _processSnapshotData(event.snapshot);
         try {
           final data = event.snapshot.value;
           debugPrint('[HomeScreen _loadCalls] 수신 데이터: $data');
@@ -80,6 +230,11 @@ class _HomeScreenState extends State<HomeScreen> {
           final Map<dynamic, dynamic> dataMap;
           if (data is Map) {
             dataMap = data;
+            // 각 call별로 개별 로그 출력
+            debugPrint('[HomeScreen _loadCalls] 수신 데이터 개수: ${dataMap.length}개');
+            dataMap.forEach((key, value) {
+              debugPrint('[HomeScreen _loadCalls] $key 원본: $value');
+            });
           } else {
             debugPrint('[HomeScreen _loadCalls] 데이터 형식이 Map이 아닙니다: $data');
             if (mounted) {
@@ -111,18 +266,28 @@ class _HomeScreenState extends State<HomeScreen> {
               final status = call['status']?.toString() ?? 'unknown';
               final bool hasResponder = call['responder'] != null;
               debugPrint(
-                '[HomeScreen _loadCalls] call $key 처리 중: status=$status, hasResponder=$hasResponder',
+                '[HomeScreen _loadCalls] call $key 처리 중: status=$status, hasResponder=$hasResponder, eventType=${call['eventType']}, address=${call['address']}',
               );
+              // call8만 특별히 상세 로그
+              if (key.toString() == 'call8') {
+                debugPrint(
+                  '[HomeScreen _loadCalls] ⚠️ call8 상세 분석: 원본=$value, 파싱된 status=$status',
+                );
+              }
 
-              // <<<< 원래 의도했던, "웹에서 호출하기를 누른 후, 아직 대원이 배정되지 않은 건만" 표시하는 필터링 로직 >>>>
+              // 수정된 필터링 로직: dispatched 상태이고 responder가 없는 건만 표시
               // 1. status가 'dispatched' 이어야 하고 (웹에서 "호출하기"를 누른 상태)
               // 2. responder가 아직 할당되지 않았어야 하며 (다른 대원이 아직 수락하지 않음)
               // 3. status가 'completed'가 아니어야 함 (완료된 건 제외)
+              debugPrint(
+                '[HomeScreen _loadCalls] call ${call['id']} 상태 체크: status=$status, hasResponder=$hasResponder',
+              );
+
               if (status == 'dispatched' &&
                   !hasResponder &&
                   status != 'completed') {
                 debugPrint(
-                  '[HomeScreen _loadCalls] call $key 최종 필터 통과! 목록에 추가합니다.',
+                  '[HomeScreen _loadCalls] ✅ call $key 최종 필터 통과! 목록에 추가합니다. (${call['eventType']} - ${call['address']})',
                 );
 
                 final double lat = _safeDouble(call['lat'], 0.0);
@@ -140,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 });
               } else {
                 debugPrint(
-                  '[HomeScreen _loadCalls] call $key 최종 필터 미통과. (status: $status, hasResponder: $hasResponder, isCompleted: ${status == 'completed'})',
+                  '[HomeScreen _loadCalls] ❌ call $key 최종 필터 미통과. (status: $status, hasResponder: $hasResponder, isCompleted: ${status == 'completed'}) - ${call['eventType']} ${call['address']}',
                 );
               }
             } catch (e) {

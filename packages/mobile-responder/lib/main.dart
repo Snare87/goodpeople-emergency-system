@@ -26,8 +26,28 @@ void main() async {
   // 알림 서비스 초기화
   await NotificationService().initialize();
 
-  // Firebase 오프라인 지속성 활성화
+  // Firebase 오프라인 지속성 활성화 (원래대로 복구)
   FirebaseDatabase.instance.setPersistenceEnabled(true);
+
+  // Firebase 연결 상태 및 진단 정보
+  FirebaseDatabase.instance.ref('.info/connected').onValue.listen((event) {
+    final connected = event.snapshot.value as bool? ?? false;
+    debugPrint('🔥 Firebase 연결 상태: $connected');
+
+    if (!connected) {
+      debugPrint('❌ Firebase 연결 실패 - 네트워크 또는 설정 문제');
+    } else {
+      debugPrint('✅ Firebase 연결 성공');
+    }
+  });
+
+  // 서버 시간으로 연결 테스트
+  FirebaseDatabase.instance.ref('.info/serverTimeOffset').onValue.listen((
+    event,
+  ) {
+    final offset = event.snapshot.value;
+    debugPrint('🕐 Firebase 서버 시간 오프셋: $offset');
+  });
 
   runApp(const MyApp());
 }

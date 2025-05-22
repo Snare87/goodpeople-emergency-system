@@ -53,7 +53,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBrdwJI2Ub6j1P5NlrwhD9YZqyllRriUUs',
+    apiKey: 'AIzaSyDHPRlIqqYH25PyjMOAIe6BBzywEOo5a3w',
     appId: '1:24321943098:android:98c5ca96e29194c796f703',
     messagingSenderId: '24321943098',
     projectId: 'goodpeople-95f54',
