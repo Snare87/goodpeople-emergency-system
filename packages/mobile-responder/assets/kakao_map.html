@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>카카오맵</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; }
+        #map { width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=924295213d91b59d898c580fe7f65560"></script>
+    <script>
+        // 카카오맵 초기화
+        var map;
+        var markers = [];
+
+        function initMap() {
+            var container = document.getElementById('map');
+            var options = {
+                center: new kakao.maps.LatLng(37.5665, 126.9780),
+                level: 3
+            };
+            map = new kakao.maps.Map(container, options);
+
+            // Flutter → JavaScript 통신 설정
+            try {
+                window.addEventListener('flutterInAppWebViewPlatformReady', function(event) {
+                    window.flutter_inappwebview.callHandler('ready');
+                });
+            } catch (e) {
+                console.error('Flutter 통신 초기화 오류:', e);
+            }
+        }
+
+        // 마커 업데이트 함수
+        function updateMap(markersData, centerLat, centerLng) {
+            // 기존 마커 제거
+            removeAllMarkers();
+            
+            // 새 마커 추가
+            markersData.forEach(function(markerData) {
+                addMarker(markerData);
+            });
+            
+            // 중심 좌표 설정
+            map.setCenter(new kakao.maps.LatLng(centerLat, centerLng));
+        }
+
+        // 마커 추가 함수
+        function addMarker(markerData) {
+            var markerImage = getMarkerImageByType(markerData.type);
+            
+            var marker = new kakao.maps.Marker({
+                position: new kakao.maps.LatLng(markerData.lat, markerData.lng),
+                map: map,
+                title: markerData.title,
+                image: markerImage
+            });
+            
+            markers.push(marker);
+            
+            // 인포윈도우 생성
+            var infowindow = new kakao.maps.InfoWindow({
+                content: '<div style="padding:5px;">' + markerData.content + '</div>'
+            });
+            
+            // 마커 클릭 이벤트
+            kakao.maps.event.addListener(marker, 'click', function() {
+                infowindow.open(map, marker);
+                // Flutter에 이벤트 전달
+                try {
+                    window.flutter_inappwebview.callHandler('markerTap', markerData.id);
+                } catch (e) {
+                    console.error('Flutter 통신 오류:', e);
+                }
+            });
+        }
+
+        // 모든 마커 제거
+        function removeAllMarkers() {
+            markers.forEach(function(marker) {
+                marker.setMap(null);
+            });
+            markers = [];
+        }
+
+        // 마커 타입별 이미지 가져오기
+        function getMarkerImageByType(type) {
+            var imageSrc;
+            var imageSize = new kakao.maps.Size(24, 35);
+            
+            switch(type) {
+                case '화재':
+                    imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png';
+                    break;
+                case '구조':
+                    imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png';
+                    break;
+                case '구급':
+                    imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_blue.png';
+                    break;
+                default:
+                    imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_yellow.png';
+            }
+            
+            return new kakao.maps.MarkerImage(imageSrc, imageSize);
+        }
+
+        // 지도 초기화
+        initMap();
+    </script>
+</body>
+</html>

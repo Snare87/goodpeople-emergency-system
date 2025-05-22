@@ -1,0 +1,23 @@
+{
+  "name": "goodpeople-emergency-system",
+  "version": "1.0.0",
+  "description": "119 재난 대응 통합 시스템",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "install:all": "npm install && cd packages/mobile-responder && flutter pub get",
+    "dev:web": "cd packages/web-dashboard && npm start",
+    "dev:mobile": "cd packages/mobile-responder && flutter run",
+    "build:web": "cd packages/web-dashboard && npm run build",
+    "build:mobile": "cd packages/mobile-responder && flutter build apk",
+    "test:web": "cd packages/web-dashboard && npm test",
+    "test:mobile": "cd packages/mobile-responder && flutter test",
+    "clean:web": "cd packages/web-dashboard && rm -rf node_modules build",
+    "clean:mobile": "cd packages/mobile-responder && flutter clean"
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  }
+}
