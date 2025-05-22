@@ -1,4 +1,5 @@
 // lib/screens/home_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,12 +22,23 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String _filterType = "전체"; // 필터링 타입
   Position? _currentPosition; // 사용자 현재 위치
+  StreamSubscription? _callsSubscription; // <<< StreamSubscription 변수 추가
 
   @override
   void initState() {
     super.initState();
+    debugPrint('[HomeScreen] initState 호출됨'); // initState 호출 확인
     _getCurrentPosition();
     _loadCalls();
+  }
+
+  @override
+  void dispose() {
+    debugPrint(
+      '[HomeScreen] dispose 호출됨, _callsSubscription 취소 시도',
+    ); // dispose 호출 확인
+    _callsSubscription?.cancel(); // <<< dispose 시 리스너 구독 취소
+    super.dispose();
   }
 
   // 현재 위치 가져오기
@@ -42,60 +54,80 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 재난 데이터 로드
+  // 재난 데이터 로드 (단순화 + setState 복원)
   void _loadCalls() {
-    dbRef.onValue.listen(
+    debugPrint('[HomeScreen _loadCalls] 함수 시작 - SIMPLIFIED_WITH_SETSTATE');
+    _callsSubscription?.cancel();
+    _callsSubscription = dbRef.onValue.listen(
       (event) {
+        debugPrint('[HomeScreen _loadCalls] Firebase 데이터 변경 감지! (리스너 콜백)');
         try {
           final data = event.snapshot.value;
+          debugPrint('[HomeScreen _loadCalls] 수신 데이터: $data');
 
-          // data가 null이거나 Map이 아닌 경우 처리
           if (data == null) {
-            setState(() {
-              openCalls = [];
-              filteredCalls = [];
-              _isLoading = false;
-            });
+            debugPrint('[HomeScreen _loadCalls] 수신 데이터가 null입니다.');
+            if (mounted) {
+              setState(() {
+                openCalls = []; // openCalls를 비움
+                _isLoading = false;
+                _applyFilters(); // 필터 함수 호출
+              });
+            }
             return;
           }
 
-          // 타입 체크 및 변환
           final Map<dynamic, dynamic> dataMap;
           if (data is Map) {
             dataMap = data;
           } else {
-            debugPrint('데이터 형식이 예상과 다릅니다: $data');
-            setState(() {
-              openCalls = [];
-              filteredCalls = [];
-              _isLoading = false;
-            });
+            debugPrint('[HomeScreen _loadCalls] 데이터 형식이 Map이 아닙니다: $data');
+            if (mounted) {
+              setState(() {
+                openCalls = [];
+                _isLoading = false;
+                _applyFilters();
+              });
+            }
             return;
           }
 
+          // === 데이터 파싱 및 results 리스트 생성 부분 복원 ===
           final List<Map<String, dynamic>> results = [];
+          debugPrint(
+            '[HomeScreen _loadCalls] dataMap 순회 시작, 총 ${dataMap.length}개 항목',
+          );
 
           dataMap.forEach((key, value) {
             try {
-              // 타입 체크 및 안전한 변환
               if (value is! Map) {
-                debugPrint('항목 데이터 형식이 예상과 다릅니다: $value');
-                return; // 이 항목은 건너뛰고 계속 진행
+                debugPrint(
+                  '[HomeScreen _loadCalls] 항목 ($key) 데이터 형식이 Map이 아닙니다: $value',
+                );
+                return;
               }
 
               final Map<dynamic, dynamic> call = value;
-
-              // null 체크 및 기본값 제공
               final status = call['status']?.toString() ?? 'unknown';
+              final bool hasResponder = call['responder'] != null;
+              debugPrint(
+                '[HomeScreen _loadCalls] call $key 처리 중: status=$status, hasResponder=$hasResponder',
+              );
 
-              // 상태가 idle 또는 dispatched지만 완료(completed)가 아닌 재난만 표시
-              if ((status == 'idle' || status == 'dispatched') &&
+              // <<<< 원래 의도했던, "웹에서 호출하기를 누른 후, 아직 대원이 배정되지 않은 건만" 표시하는 필터링 로직 >>>>
+              // 1. status가 'dispatched' 이어야 하고 (웹에서 "호출하기"를 누른 상태)
+              // 2. responder가 아직 할당되지 않았어야 하며 (다른 대원이 아직 수락하지 않음)
+              // 3. status가 'completed'가 아니어야 함 (완료된 건 제외)
+              if (status == 'dispatched' &&
+                  !hasResponder &&
                   status != 'completed') {
-                // 안전한 데이터 추출
+                debugPrint(
+                  '[HomeScreen _loadCalls] call $key 최종 필터 통과! 목록에 추가합니다.',
+                );
+
                 final double lat = _safeDouble(call['lat'], 0.0);
                 final double lng = _safeDouble(call['lng'], 0.0);
 
-                // 가공된 데이터 저장
                 results.add({
                   'id': key.toString(),
                   'eventType': call['eventType']?.toString() ?? '알 수 없음',
@@ -106,22 +138,30 @@ class _HomeScreenState extends State<HomeScreen> {
                   'startAt': _safeInt(call['startAt'], 0),
                   'distance': 0.0,
                 });
+              } else {
+                debugPrint(
+                  '[HomeScreen _loadCalls] call $key 최종 필터 미통과. (status: $status, hasResponder: $hasResponder, isCompleted: ${status == 'completed'})',
+                );
               }
             } catch (e) {
-              debugPrint('항목 처리 중 오류 발생: $e');
-              // 한 항목에서 오류 발생해도 계속 진행
+              debugPrint('[HomeScreen _loadCalls] 항목 ($key) 처리 중 오류 발생: $e');
             }
           });
+          // === 데이터 파싱 및 results 리스트 생성 부분 복원 끝 ===
 
           if (mounted) {
+            debugPrint(
+              '[HomeScreen _loadCalls] setState 호출 전, openCalls: ${results.length}개, isLoading: false',
+            );
             setState(() {
-              openCalls = results;
+              openCalls = results; // <<< openCalls 상태 업데이트 복원!
               _isLoading = false;
-              _applyFilters(); // 필터 적용
+              _applyFilters(); // <<< _applyFilters 호출 복원!
             });
+            debugPrint('[HomeScreen _loadCalls] setState 호출 완료');
           }
         } catch (e) {
-          debugPrint('데이터 처리 중 오류 발생: $e');
+          debugPrint('[HomeScreen _loadCalls] 데이터 처리 중 전체 오류 발생: $e');
           if (mounted) {
             setState(() {
               _isLoading = false;
@@ -130,13 +170,16 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
       onError: (error) {
-        debugPrint('데이터를 불러오는데 실패했습니다: $error');
+        debugPrint('[HomeScreen _loadCalls] Firebase 데이터 수신 오류: $error');
         if (mounted) {
           setState(() {
             _isLoading = false;
           });
         }
       },
+    );
+    debugPrint(
+      '[HomeScreen _loadCalls] 함수 종료 - 리스너 등록됨 - SIMPLIFIED_WITH_SETSTATE',
     );
   }
 
@@ -165,15 +208,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // 필터 적용
   void _applyFilters() {
+    debugPrint(
+      '[HomeScreen _applyFilters] 함수 시작, 현재 openCalls 개수: ${openCalls.length}, 필터 타입: $_filterType',
+    );
     try {
       if (openCalls.isEmpty) {
-        setState(() {
-          filteredCalls = [];
-        });
+        debugPrint(
+          '[HomeScreen _applyFilters] openCalls가 비어있어 filteredCalls를 비웁니다.',
+        );
+        if (mounted) {
+          // mounted 체크 추가
+          setState(() {
+            filteredCalls = [];
+          });
+        }
         return;
       }
 
       List<Map<String, dynamic>> filtered = List.from(openCalls);
+      debugPrint(
+        '[HomeScreen _applyFilters] 필터링 전 항목: ${filtered.map((c) => c['id']).toList()}',
+      );
 
       // 이벤트 타입에 따른 필터
       if (_filterType != "전체") {
@@ -181,10 +236,14 @@ class _HomeScreenState extends State<HomeScreen> {
             filtered.where((call) {
               return call['eventType'] == _filterType;
             }).toList();
+        debugPrint(
+          '[HomeScreen _applyFilters] 타입 필터링 후 ($_filterType): ${filtered.map((c) => c['id']).toList()}',
+        );
       }
 
       // 현재 위치가 있으면 거리 계산 및 정렬
       if (_currentPosition != null) {
+        debugPrint('[HomeScreen _applyFilters] 현재 위치 있음, 거리 계산 및 정렬 시작');
         for (var call in filtered) {
           try {
             double callLat = _safeDouble(call['lat'], 0.0);
@@ -199,52 +258,68 @@ class _HomeScreenState extends State<HomeScreen> {
                 callLng,
               );
             } catch (e) {
-              debugPrint('거리 계산 중 오류: $e');
+              debugPrint(
+                '[HomeScreen _applyFilters] 거리 계산 중 오류 (call ${call['id']}): $e',
+              );
             }
-
             call['distance'] = distance;
+            debugPrint(
+              '[HomeScreen _applyFilters] call ${call['id']} 거리 계산: ${distance}m',
+            );
           } catch (e) {
-            debugPrint('거리 계산 항목 처리 중 오류: $e');
-            call['distance'] = double.maxFinite; // 오류 시 가장 먼 거리로 설정
+            debugPrint(
+              '[HomeScreen _applyFilters] 거리 계산 항목 처리 중 오류 (call ${call['id']}): $e',
+            );
+            call['distance'] = double.maxFinite;
           }
         }
 
-        // 거리순 정렬
         try {
           filtered.sort((a, b) {
             double distA = _safeDouble(a['distance'], double.maxFinite);
             double distB = _safeDouble(b['distance'], double.maxFinite);
             return distA.compareTo(distB);
           });
+          debugPrint('[HomeScreen _applyFilters] 거리순 정렬 완료');
         } catch (e) {
-          debugPrint('거리 정렬 중 오류: $e');
+          debugPrint('[HomeScreen _applyFilters] 거리 정렬 중 오류: $e');
         }
       } else {
-        // 시간순 정렬 (최근 발생 순)
+        debugPrint('[HomeScreen _applyFilters] 현재 위치 없음, 시간순 정렬 시작');
         try {
           filtered.sort((a, b) {
             int timeA = _safeInt(a['startAt'], 0);
             int timeB = _safeInt(b['startAt'], 0);
             return timeB.compareTo(timeA);
           });
+          debugPrint('[HomeScreen _applyFilters] 시간순 정렬 완료');
         } catch (e) {
-          debugPrint('시간 정렬 중 오류: $e');
+          debugPrint('[HomeScreen _applyFilters] 시간 정렬 중 오류: $e');
         }
       }
 
       if (mounted) {
+        debugPrint(
+          '[HomeScreen _applyFilters] setState 호출 전, filteredCalls: ${filtered.map((c) => c['id']).toList()}',
+        );
         setState(() {
           filteredCalls = filtered;
         });
+        debugPrint(
+          '[HomeScreen _applyFilters] setState 호출 완료, 최종 filteredCalls 개수: ${filteredCalls.length}',
+        );
+      } else {
+        debugPrint('[HomeScreen _applyFilters] mounted가 false라 setState 호출 안함');
       }
     } catch (e) {
-      debugPrint('필터 적용 중 오류 발생: $e');
+      debugPrint('[HomeScreen _applyFilters] 필터 적용 중 전체 오류 발생: $e');
       if (mounted) {
         setState(() {
           filteredCalls = [];
         });
       }
     }
+    debugPrint('[HomeScreen _applyFilters] 함수 종료');
   }
 
   // 이벤트 타입에 따른 아이콘
@@ -419,6 +494,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCallCard(Map<String, dynamic> call) {
     final eventType = call['eventType'] as String;
     final distance = call['distance'] as double;
+    final status = call['status'] as String; // status 변수를 명시적으로 사용
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -458,7 +534,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const Spacer(),
-                  if (_currentPosition != null)
+                  if (_currentPosition != null &&
+                      distance != double.maxFinite) // 거리 표시 조건 강화
                     Text(
                       _formatDistance(distance),
                       style: TextStyle(
@@ -475,12 +552,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    call['status'] == 'idle' ? '대기 중' : '출동 중',
+                    '수락 대기 중', // 또는 '새로운 호출', '출동 요청' 등 명확한 용어
                     style: TextStyle(
-                      color:
-                          call['status'] == 'idle'
-                              ? Colors.orange
-                              : Colors.green,
+                      color: Colors.deepOrangeAccent, // 주목도를 높이는 색상
                       fontWeight: FontWeight.bold,
                     ),
                   ),

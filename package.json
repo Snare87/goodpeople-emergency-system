@@ -19,5 +19,8 @@
   },
   "devDependencies": {
     "concurrently": "^7.6.0"
+  },
+  "dependencies": {
+    "goodpeople-emergency-system": "file:"
   }
 }
