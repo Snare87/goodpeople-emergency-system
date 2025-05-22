@@ -1,4 +1,4 @@
-// lib/screens/my_missions_screen.dart - 최종 버전 (디버그 제거)
+// lib/screens/my_missions_screen.dart - info 표시 추가된 최종 버전
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:goodpeople_responder/models/call.dart';
@@ -205,6 +205,35 @@ class _MissionCardState extends State<MissionCard> {
                             color: Colors.grey,
                           ),
                         ),
+
+                        // 상황 정보 추가
+                        if (widget.mission.info != null &&
+                            widget.mission.info!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[50],
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.orange[200]!),
+                            ),
+                            child: Text(
+                              widget.mission.info!.length > 25
+                                  ? '${widget.mission.info!.substring(0, 25)}...'
+                                  : widget.mission.info!,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.orange[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -275,10 +304,10 @@ class _MissionCardState extends State<MissionCard> {
     switch (eventType) {
       case '화재':
         return Colors.red;
-      case '구급':
-        return Colors.green;
       case '구조':
         return Colors.blue;
+      case '구급':
+        return Colors.green;
       case '기타':
         return Colors.orange;
       default:

@@ -11,6 +11,7 @@ class Call {
   final int? completedAt;
   final Responder? responder;
   final double distance;
+  final String? info; // 새로 추가
 
   Call({
     required this.id,
@@ -24,6 +25,7 @@ class Call {
     this.completedAt,
     this.responder,
     this.distance = 0.0,
+    this.info, // 새로 추가
   });
 
   factory Call.fromMap(String id, Map<dynamic, dynamic> map) {
@@ -39,6 +41,7 @@ class Call {
       completedAt: map['completedAt'],
       responder:
           map['responder'] != null ? Responder.fromMap(map['responder']) : null,
+      info: map['info'], // 새로 추가
     );
   }
 
@@ -54,6 +57,7 @@ class Call {
     int? completedAt,
     Responder? responder,
     double? distance,
+    String? info, // 새로 추가
   }) {
     return Call(
       id: id ?? this.id,
@@ -67,6 +71,7 @@ class Call {
       completedAt: completedAt ?? this.completedAt,
       responder: responder ?? this.responder,
       distance: distance ?? this.distance,
+      info: info ?? this.info, // 새로 추가
     );
   }
 }

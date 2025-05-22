@@ -175,8 +175,13 @@ const renderCustomCallDetail = () => {
         </div>
         
         {/* 우측: 내용 영역 (2/4 = 1/2) */}
-        <div className="col-span-6 bg-gray-200 rounded-lg flex items-center justify-center">
-          <p className="text-gray-600 font-medium text-center">70대 남자, 쓰러짐, 의식 호흡 없음, 심정지 추정</p>
+        <div className="col-span-6 bg-gray-200 rounded-lg flex items-center justify-center p-4">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold mb-2 text-gray-800">상황 정보</h3>
+            <p className="text-gray-600 font-medium">
+              {selectedCall.info || '상세 정보가 없습니다'}
+            </p>
+          </div>
         </div>
       </div>
     );

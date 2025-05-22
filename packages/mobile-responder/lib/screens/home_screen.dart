@@ -321,7 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// CallCard 컴포넌트는 그대로 유지 (변경사항 없음)
+// CallCard 컴포넌트 - info 표시 추가
 class CallCard extends StatefulWidget {
   final Call call;
   final Position? currentPosition;
@@ -341,11 +341,12 @@ class CallCard extends StatefulWidget {
 class _CallCardState extends State<CallCard> {
   late Timer _timer;
   DateTime _currentTime = DateTime.now();
+  bool _hasActiveMission = false;
 
   @override
   void initState() {
     super.initState();
-    // 실시간 경과시간 업데이트 타이머
+    _checkActiveMission();
     _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (mounted) {
         setState(() {
@@ -361,10 +362,27 @@ class _CallCardState extends State<CallCard> {
     super.dispose();
   }
 
+  // 활성 임무 확인
+  void _checkActiveMission() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      final hasActive = await CallDataService().hasActiveMission(
+        currentUser.uid,
+      );
+      if (mounted) {
+        setState(() {
+          _hasActiveMission = hasActive;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      // 활성 임무가 있으면 비활성화 표시
+      color: _hasActiveMission ? Colors.grey[100] : null,
       child: InkWell(
         onTap: widget.onTap,
         child: Padding(
@@ -376,15 +394,19 @@ class _CallCardState extends State<CallCard> {
                 children: [
                   Icon(
                     _getEventTypeIcon(widget.call.eventType),
-                    color: _getEventTypeColor(widget.call.eventType),
+                    color:
+                        _hasActiveMission
+                            ? Colors.grey
+                            : _getEventTypeColor(widget.call.eventType),
                     size: 28,
                   ),
                   const SizedBox(width: 8),
                   Text(
                     widget.call.eventType,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
+                      color: _hasActiveMission ? Colors.grey : null,
                     ),
                   ),
                   const Spacer(),
@@ -393,29 +415,90 @@ class _CallCardState extends State<CallCard> {
                     Text(
                       _formatDistance(widget.call.distance),
                       style: TextStyle(
-                        color: Colors.grey[600],
+                        color:
+                            _hasActiveMission ? Colors.grey : Colors.grey[600],
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text(widget.call.address, style: const TextStyle(fontSize: 16)),
+              Text(
+                widget.call.address,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: _hasActiveMission ? Colors.grey : null,
+                ),
+              ),
+
+              // 상황 정보 미리보기 추가
+              if (widget.call.info != null && widget.call.info!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _hasActiveMission ? Colors.grey[50] : Colors.red[50],
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color:
+                          _hasActiveMission
+                              ? Colors.grey[300]!
+                              : Colors.red[200]!,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 14,
+                        color:
+                            _hasActiveMission ? Colors.grey : Colors.red[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          widget.call.info!.length > 30
+                              ? '${widget.call.info!.substring(0, 30)}...'
+                              : widget.call.info!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color:
+                                _hasActiveMission
+                                    ? Colors.grey
+                                    : Colors.red[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 4),
               // 시간 정보
               Row(
                 children: [
                   Text(
                     _formatTime(widget.call.startAt),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
+                      color: _hasActiveMission ? Colors.grey : null,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     _getElapsedTime(widget.call.startAt),
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: _hasActiveMission ? Colors.grey : Colors.grey[600],
+                    ),
                   ),
                 ],
               ),
@@ -424,25 +507,61 @@ class _CallCardState extends State<CallCard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '수락 대기 중',
+                    _hasActiveMission ? '다른 임무 진행중' : '수락 대기 중',
                     style: TextStyle(
-                      color: Colors.deepOrangeAccent,
+                      color:
+                          _hasActiveMission
+                              ? Colors.grey
+                              : Colors.deepOrangeAccent,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   ElevatedButton(
-                    onPressed: widget.onTap,
+                    onPressed: _hasActiveMission ? null : widget.onTap,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
+                      backgroundColor:
+                          _hasActiveMission ? Colors.grey : Colors.red,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 8,
                       ),
                     ),
-                    child: const Text('상세보기'),
+                    child: Text(_hasActiveMission ? '수락불가' : '상세보기'),
                   ),
                 ],
               ),
+
+              // 활성 임무가 있을 때 안내 메시지
+              if (_hasActiveMission) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.orange[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.orange[700],
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          '현재 진행중인 임무를 완료한 후 새로운 임무를 수락할 수 있습니다.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -480,7 +599,7 @@ class _CallCardState extends State<CallCard> {
       case '구조':
         return Icons.support;
       case '기타':
-        return Icons.warning; // 기타 아이콘 추가
+        return Icons.warning;
       default:
         return Icons.help_outline;
     }
@@ -495,7 +614,7 @@ class _CallCardState extends State<CallCard> {
       case '구조':
         return Colors.blue;
       case '기타':
-        return Colors.orange; // 기타 색상 추가
+        return Colors.orange;
       default:
         return Colors.grey;
     }

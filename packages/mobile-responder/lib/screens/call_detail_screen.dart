@@ -376,10 +376,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
                             '경과시간',
                             _getElapsedTime(callDetails?['startAt']),
                           ),
-                          _buildInfoRow(
-                            '상황 정보',
-                            callDetails?['info'] ?? '상세 정보가 없습니다',
-                          ),
                           if (distanceToSite != null)
                             _buildInfoRow(
                               '현장까지 거리',
@@ -389,6 +385,54 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 16),
+
+                  // 상황 정보를 별도 섹션으로 강조 (새로 추가)
+                  if (callDetails?['info'] != null &&
+                      callDetails!['info'].toString().isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red[200]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.warning,
+                                color: Colors.red[600],
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '긴급 상황 정보',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red[800],
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            callDetails!['info'].toString(),
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Colors.red[700],
+                              fontWeight: FontWeight.w500,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
                   const SizedBox(height: 16),
 
