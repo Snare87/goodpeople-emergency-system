@@ -4,7 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/main_screen.dart'; // 추가
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:goodpeople_responder/services/notification_service.dart';
@@ -66,8 +66,8 @@ class MyApp extends StatelessWidget {
           // 인증 상태에 따라 화면 분기
           if (snapshot.connectionState == ConnectionState.active) {
             if (snapshot.hasData) {
-              // 로그인된 상태
-              return const HomeScreen();
+              // 로그인된 상태 - MainScreen으로 변경
+              return const MainScreen();
             } else {
               // 로그인되지 않은 상태
               return const LoginScreen();

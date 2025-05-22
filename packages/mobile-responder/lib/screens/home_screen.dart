@@ -10,7 +10,9 @@ import 'package:goodpeople_responder/models/call.dart';
 import 'package:goodpeople_responder/services/call_data_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final bool isTabView; // 새로 추가된 매개변수
+
+  const HomeScreen({super.key, this.isTabView = false});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -158,8 +160,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadCalls();
   }
 
-  // 로그아웃
+  // 로그아웃 함수를 조건부로 수정
   Future<void> _logout() async {
+    // 탭뷰 모드일 때는 로그아웃 기능을 비활성화 (MainScreen에서 처리)
+    if (widget.isTabView) return;
+
     await FirebaseAuth.instance.signOut();
     if (mounted) {
       Navigator.of(context).pushReplacement(
@@ -170,6 +175,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 탭뷰 모드일 때는 Scaffold 없이 본문만 반환
+    if (widget.isTabView) {
+      return _buildBody();
+    }
+
+    // 기존 독립 화면 모드
     return Scaffold(
       appBar: AppBar(
         title: const Text('재난 대응 시스템'),
@@ -186,15 +197,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // 필터 영역
-          _buildFilterSection(),
+      body: _buildBody(),
+    );
+  }
 
-          // 재난 목록 영역
-          Expanded(child: _buildCallsList()),
-        ],
-      ),
+  // 본문 위젯을 별도 메서드로 분리
+  Widget _buildBody() {
+    return Column(
+      children: [
+        // 필터 영역
+        _buildFilterSection(),
+
+        // 재난 목록 영역
+        Expanded(child: _buildCallsList()),
+      ],
     );
   }
 

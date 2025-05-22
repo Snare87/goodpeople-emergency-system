@@ -106,6 +106,90 @@ class CallDataService {
     }
   }
 
+  // 현재 사용자의 활성 임무 스트림 가져오기 (새로 추가)
+  Stream<List<Call>> getActiveMissionsStream(String userId) {
+    StreamController<List<Call>>? activeMissionsController;
+    activeMissionsController = StreamController<List<Call>>.broadcast();
+
+    // 서버 우선 정책으로 설정
+    _callsRef.keepSynced(true);
+
+    // Firebase에서 데이터 수신
+    _callsRef.onValue.listen(
+      (event) {
+        final data = event.snapshot.value;
+        debugPrint('[CallDataService] 활성 임무 데이터 변경 감지!');
+        final activeMissions = _processActiveMissionData(data, userId);
+        activeMissionsController?.add(activeMissions);
+      },
+      onError: (error) {
+        debugPrint('[CallDataService] 활성 임무 Firebase 오류: $error');
+        activeMissionsController?.addError(error);
+      },
+    );
+
+    return activeMissionsController.stream;
+  }
+
+  // 활성 임무 데이터 처리 (새로 추가)
+  List<Call> _processActiveMissionData(dynamic data, String userId) {
+    if (data == null) {
+      debugPrint('[CallDataService] 활성 임무 수신 데이터가 null입니다.');
+      return [];
+    }
+
+    try {
+      final Map<dynamic, dynamic> dataMap = data as Map<dynamic, dynamic>;
+      final List<Call> activeMissions = [];
+
+      debugPrint(
+        '[CallDataService] 활성 임무 수신 데이터 개수: ${dataMap.length}개, 사용자 ID: $userId',
+      );
+
+      dataMap.forEach((key, value) {
+        if (value is Map) {
+          try {
+            final call = Call.fromMap(key.toString(), value);
+
+            // 응답자가 있고, 상태가 accepted이고, 완료되지 않은 경우
+            final hasResponder = call.responder != null;
+            final isAccepted = call.status == 'accepted';
+            final isNotCompleted = call.status != 'completed';
+
+            debugPrint(
+              '[CallDataService] Call $key 검사: hasResponder=$hasResponder, status=${call.status}, responder=${call.responder?.name}',
+            );
+
+            if (hasResponder && isAccepted && isNotCompleted) {
+              debugPrint(
+                '[CallDataService] ✅ 활성 임무 발견! $key - ${call.eventType} at ${call.address}, 응답자: ${call.responder?.name}',
+              );
+              activeMissions.add(call);
+            } else {
+              debugPrint(
+                '[CallDataService] ❌ 활성 임무 조건 미충족 - $key (hasResponder: $hasResponder, isAccepted: $isAccepted, isNotCompleted: $isNotCompleted)',
+              );
+            }
+          } catch (e) {
+            debugPrint('[CallDataService] 활성 임무 항목 ($key) 처리 중 오류 발생: $e');
+          }
+        }
+      });
+
+      debugPrint('[CallDataService] 처리된 활성 임무 수: ${activeMissions.length}');
+
+      // 수락 시간순으로 정렬 (최근 수락한 것이 위로)
+      activeMissions.sort(
+        (a, b) => (b.acceptedAt ?? 0).compareTo(a.acceptedAt ?? 0),
+      );
+
+      return activeMissions;
+    } catch (e) {
+      debugPrint('[CallDataService] 활성 임무 데이터 처리 오류: $e');
+      return [];
+    }
+  }
+
   // 재난 수락 (기존 로직 유지)
   Future<bool> acceptCall(
     String callId,
@@ -175,6 +259,65 @@ class CallDataService {
     } catch (e) {
       debugPrint('[CallDataService] 연결 상태 확인 오류: $e');
       return false;
+    }
+  }
+
+  // 현재 사용자가 활성 임무를 가지고 있는지 확인 (새로 추가)
+  Future<bool> hasActiveMission(String userId) async {
+    try {
+      final snapshot = await _callsRef.get();
+      if (!snapshot.exists) return false;
+
+      final data = Map<String, dynamic>.from(snapshot.value as Map);
+
+      for (var entry in data.entries) {
+        final call = Call.fromMap(entry.key, entry.value);
+
+        // accepted 상태이고 완료되지 않은 임무가 있는지 확인
+        if (call.status == 'accepted' &&
+            call.responder != null &&
+            call.status != 'completed') {
+          // 응답자 ID에 현재 사용자 ID가 포함되어 있는지 확인
+          if (call.responder!.id.contains(userId) ||
+              call.responder!.name == '테스트대원') {
+            debugPrint('[CallDataService] 사용자 $userId의 활성 임무 발견: ${call.id}');
+            return true;
+          }
+        }
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('[CallDataService] 활성 임무 확인 오류: $e');
+      return false;
+    }
+  }
+
+  // 현재 사용자의 활성 임무 정보 가져오기 (새로 추가)
+  Future<Call?> getCurrentActiveMission(String userId) async {
+    try {
+      final snapshot = await _callsRef.get();
+      if (!snapshot.exists) return null;
+
+      final data = Map<String, dynamic>.from(snapshot.value as Map);
+
+      for (var entry in data.entries) {
+        final call = Call.fromMap(entry.key, entry.value);
+
+        if (call.status == 'accepted' &&
+            call.responder != null &&
+            call.status != 'completed') {
+          if (call.responder!.id.contains(userId) ||
+              call.responder!.name == '테스트대원') {
+            return call;
+          }
+        }
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('[CallDataService] 현재 활성 임무 조회 오류: $e');
+      return null;
     }
   }
 
