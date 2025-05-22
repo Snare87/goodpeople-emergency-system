@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatTime, getElapsedTime } from '../utils/formatters';
 
-const CallsList = React.memo(function CallsList({ calls, onSelect, selectedId, onDispatch, onReactivate, showCompletedInfo = false }) {
+const CallsList = React.memo(function CallsList({ calls, onSelect, selectedId, onDispatch, onReactivate, onCancel, showCompletedInfo = false }) {
   // 실시간 갱신을 위한 타이머 상태 추가
   const [currentTime, setCurrentTime] = useState(Date.now());
   
@@ -92,12 +92,20 @@ const CallsList = React.memo(function CallsList({ calls, onSelect, selectedId, o
                 );
               } else if (status === 'dispatched') {
                 return (
-                  <button
-                    className="mt-2 px-3 py-1 bg-yellow-500 text-white rounded"
-                    disabled={true}
-                  >
-                    찾는중
-                  </button>
+                  <div className="flex flex-col gap-1 mt-2">
+                    <button
+                      className="px-3 py-1 bg-yellow-500 text-white rounded text-sm"
+                      disabled={true}
+                    >
+                      찾는중
+                    </button>
+                    <button
+                      className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                      onClick={(e) => handleClick(e, call, onCancel)}
+                    >
+                      취소
+                    </button>
+                  </div>
                 );
               } else {
                 // 기본 상태 - 호출하기

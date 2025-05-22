@@ -23,7 +23,7 @@ export const subscribeToCalls = (onDataChanged) => {
 export const dispatchCall = (id) => {
   return update(ref(db, `calls/${id}`), { 
     status: 'dispatched',
-    dispatchedAt: Date.now() 
+    dispatchedAt: Date.now()
   });
 };
 
@@ -51,8 +51,17 @@ export const completeCall = (id) => {
 // 재호출
 export const reactivateCall = (id) => {
   return update(ref(db, `calls/${id}`), { 
-    status: 'dispatched',  // 바로 dispatched 상태로 설정
+    status: 'dispatched',
     completedAt: null,
-    dispatchedAt: Date.now()
+    dispatchedAt: Date.now(),
+    responder: null  // 기존 응답자 정보도 제거
+  });
+};
+
+// 호출취소 (새로 추가)
+export const cancelCall = (id) => {
+  return update(ref(db, `calls/${id}`), { 
+    status: 'idle',
+    dispatchedAt: null
   });
 };

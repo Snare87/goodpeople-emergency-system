@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatDate, formatTime, formatDateTime, getDetailedElapsedTime, getElapsedTime } from '../utils/formatters';
 
-const CallDetail = ({ call, onDispatch, onComplete, onReactivate }) => {
+const CallDetail = ({ call, onDispatch, onComplete, onReactivate, onCancel }) => {
   // 실시간 갱신을 위한 타이머 상태 추가 (CallsList와 동일한 방식)
   const [currentTime, setCurrentTime] = useState(Date.now());
   
@@ -91,14 +91,22 @@ const CallDetail = ({ call, onDispatch, onComplete, onReactivate }) => {
               </button>
             )}
             
-            {/* 찾는중 버튼 (dispatched 상태이고 responder가 없을 때) */}
+             {/* 찾는중 상태일 때 호출취소 버튼 표시 */}
             {call.status === 'dispatched' && !call.responder && (
-              <button 
-                className="px-4 py-2 bg-yellow-500 text-white rounded"
-                disabled={true}
-              >
-                찾는중
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  className="px-4 py-2 bg-yellow-500 text-white rounded"
+                  disabled={true}
+                >
+                  찾는중
+                </button>
+                <button 
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                  onClick={() => onCancel(call.id)}
+                >
+                  호출취소
+                </button>
+              </div>
             )}
             
             {/* 매칭완료 버튼 (responder가 있을 때) */}

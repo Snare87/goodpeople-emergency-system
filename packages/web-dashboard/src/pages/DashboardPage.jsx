@@ -4,7 +4,7 @@ import Header from '../components/Header';
 import CallsList from '../components/CallsList';
 import KakaoMap from '../components/KakaoMap';
 import useCallsData from '../hooks/useCallsData';
-import { dispatchCall, acceptCall, completeCall, reactivateCall } from '../services/callService';
+import { dispatchCall, acceptCall, completeCall, reactivateCall, cancelCall } from '../services/callService';
 
 export default function DashboardPage() {
   // 커스텀 훅을 사용하여 데이터 관리
@@ -126,6 +126,17 @@ const renderCustomCallDetail = () => {
                 >
                   재난종료
                 </button>
+
+                {/* 찾는중 상태일 때만 호출취소 버튼 표시 */}
+                  {selectedCall.status === 'dispatched' && !selectedCall.responder && (
+                    <button 
+                      className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                      onClick={() => cancelCall(selectedCall.id)}
+                    >
+                      호출취소
+                    </button>
+                  )}
+
               </>
             )}
           </div>
@@ -208,11 +219,12 @@ const renderCustomCallDetail = () => {
             <div className="p-4 overflow-y-auto h-[calc(100vh-200px)]" style={{ minHeight: "200px" }}>
               {listTab === 'active' ? (
                 // 활성 재난 목록
-                <CallsList
+                 <CallsList
                   calls={activeCalls}
                   onSelect={selectCall}
                   selectedId={selectedCallId}
                   onDispatch={dispatchCall}
+                  onCancel={cancelCall}
                 />
               ) : (
                 // 완료된 재난 목록

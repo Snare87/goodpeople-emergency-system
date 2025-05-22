@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'active_mission_screen.dart';
+import 'dart:async';
 
 class CallDetailScreen extends StatefulWidget {
   final String callId;
@@ -30,12 +31,41 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
   Position? userPosition;
   double? distanceToSite;
   GoogleMapController? mapController;
+  Timer? _timeUpdateTimer; // 이 줄 추가
+  DateTime _currentTime = DateTime.now(); // 이 줄도 추가
 
   @override
   void initState() {
     super.initState();
     _loadCallDetails();
     _getCurrentPosition();
+
+    // 60초마다 현재 시간 업데이트
+    _timeUpdateTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentTime = DateTime.now();
+        });
+      }
+    });
+  }
+
+  // 경과 시간 계산 함수
+  String _getElapsedTime(int? timestamp) {
+    if (timestamp == null) return '';
+
+    final startTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final difference = _currentTime.difference(startTime);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}일 전';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}시간 ${difference.inMinutes % 60}분 전';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}분 전';
+    } else {
+      return '${difference.inSeconds}초 전';
+    }
   }
 
   // 재난 상세정보 불러오기
@@ -143,6 +173,12 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
   }
 
   @override
+  void dispose() {
+    _timeUpdateTimer?.cancel(); // 타이머 정리
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('🚨 ${widget.description} 상세')),
@@ -211,14 +247,20 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
                             callDetails?['address'] ?? '정보 없음',
                           ),
                           _buildInfoRow(
-                            '상태',
-                            callDetails?['status'] == 'idle'
-                                ? '대기 중'
-                                : callDetails?['status'] == 'dispatched'
-                                ? '출동 중'
-                                : callDetails?['status'] == 'accepted'
-                                ? '수락됨'
-                                : callDetails?['status'] ?? '알 수 없음',
+                            '발생일시',
+                            callDetails?['startAt'] != null
+                                ? DateTime.fromMillisecondsSinceEpoch(
+                                  callDetails!['startAt'],
+                                ).toString().substring(0, 16)
+                                : '정보 없음',
+                          ),
+                          _buildInfoRow(
+                            '경과시간',
+                            _getElapsedTime(callDetails?['startAt']),
+                          ),
+                          _buildInfoRow(
+                            '상황 정보',
+                            callDetails?['info'] ?? '상세 정보가 없습니다',
                           ),
                           if (distanceToSite != null)
                             _buildInfoRow(
@@ -231,31 +273,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
                   ),
 
                   const SizedBox(height: 16),
-
-                  // 위치 정보 카드
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            '위치 정보',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const Divider(),
-                          const SizedBox(height: 8),
-                          _buildInfoRow('위도', widget.lat.toString()),
-                          _buildInfoRow('경도', widget.lng.toString()),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
 
                   // 수락 버튼
                   if (callDetails?['status'] != 'accepted')
