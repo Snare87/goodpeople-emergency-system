@@ -1,12 +1,12 @@
-// lib/main.dart - 간결한 버전
+// lib/main.dart - void 오류 수정됨
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:goodpeople_responder/services/notification_service.dart';
 
@@ -14,7 +14,7 @@ import 'package:goodpeople_responder/services/notification_service.dart';
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // await firebaseMessagingBackgroundHandler(message); // 이 부분이 void를 반환할 수 있음
+  // void 반환 함수는 await 없이 호출
 }
 
 void main() async {
@@ -29,31 +29,15 @@ void main() async {
     );
     debugPrint('✅ Firebase 초기화 성공');
 
+    // Firebase 데이터베이스 설정
+    _configureFirebaseDatabase(); // await 제거 (void 오류 방지)
+
     // 백그라운드 메시지 핸들러 설정
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // 알림 서비스 초기화 - void를 반환하는 함수가 있을 수 있음
+    // 알림 서비스 초기화 - void를 반환하는 함수이므로 await 제거
     NotificationService().initialize();
     debugPrint('✅ 알림 서비스 초기화 완료');
-
-    // Firebase 오프라인 지속성 활성화
-    // void를 반환하는 함수일 수 있으므로 await 제거
-    FirebaseDatabase.instance.setPersistenceEnabled(true);
-    debugPrint('✅ Firebase 데이터베이스 지속성 활성화 완료');
-
-    // Firebase 연결 상태 및 진단 정보
-    FirebaseDatabase.instance.ref('.info/connected').onValue.listen((event) {
-      final connected = event.snapshot.value as bool? ?? false;
-      debugPrint('🔥 Firebase 연결 상태: $connected');
-    });
-
-    // 서버 시간으로 연결 테스트
-    FirebaseDatabase.instance.ref('.info/serverTimeOffset').onValue.listen((
-      event,
-    ) {
-      final offset = event.snapshot.value;
-      debugPrint('🕐 Firebase 서버 시간 오프셋: $offset');
-    });
 
     // 초기화 성공 - 정상 앱 실행
     runApp(const MyApp());
@@ -61,6 +45,37 @@ void main() async {
     debugPrint('❌ Firebase 초기화 오류: $e');
     // 초기화 실패 - 에러 화면 표시
     runApp(const MyAppErrorFallback());
+  }
+}
+
+// Firebase Realtime Database 설정 - void 반환 함수는 Future<void>로 선언하지 않음
+void _configureFirebaseDatabase() {
+  try {
+    // 오프라인 지속성 활성화 - void 반환 함수는 await 없이 호출
+    FirebaseDatabase.instance.setPersistenceEnabled(true);
+    debugPrint('✅ Firebase 데이터베이스 지속성 활성화 완료');
+
+    // 주요 경로 캐싱 설정 - void 반환 함수는 await 없이 호출
+    FirebaseDatabase.instance.ref('calls').keepSynced(true);
+    FirebaseDatabase.instance.ref('users').keepSynced(true);
+    debugPrint('✅ 주요 데이터 경로 캐싱 설정 완료');
+
+    // 연결 상태 확인
+    FirebaseDatabase.instance.ref('.info/connected').onValue.listen((event) {
+      final connected = event.snapshot.value as bool? ?? false;
+      debugPrint('🔥 Firebase 연결 상태: $connected');
+    });
+
+    // 서버 시간 확인
+    FirebaseDatabase.instance.ref('.info/serverTimeOffset').onValue.listen((
+      event,
+    ) {
+      final offset = event.snapshot.value;
+      debugPrint('🕐 Firebase 서버 시간 오프셋: $offset');
+    });
+  } catch (e) {
+    debugPrint('❌ Firebase 데이터베이스 설정 오류: $e');
+    // 오류가 발생해도 앱은 계속 실행 (오프라인 모드)
   }
 }
 
