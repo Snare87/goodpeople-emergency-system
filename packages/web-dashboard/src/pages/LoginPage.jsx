@@ -1,11 +1,9 @@
-// 4. LoginPage.jsx 수정 - 실제 로그인 기능 구현
 // src/pages/LoginPage.jsx
-
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../components/Button';
 import Header from '../components/Header';
-import { useAuth } from '../contexts/AuthContext'; // 추가
+import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -13,18 +11,42 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
+  // 이전에 알림이 표시되었는지 추적
+  const alertShownRef = useRef(false);
+  
   const navigate = useNavigate();
-  const { login, isLoggedIn } = useAuth(); // 추가
+  const location = useLocation();
+  const { login, isLoggedIn } = useAuth();
   
   // 이미 로그인한 경우 대시보드로 리다이렉트
-  React.useEffect(() => {
+  useEffect(() => {
     if (isLoggedIn) {
       navigate('/dashboard');
     }
   }, [isLoggedIn, navigate]);
+  
+  // URL 상태에서 오류 메시지 확인 (한 번만 실행)
+  useEffect(() => {
+    // 권한 오류 메시지가 있고 아직 알림이 표시되지 않았으면
+    if (location.state?.authError && !alertShownRef.current) {
+      const errorMessage = location.state.authError;
+      setError(errorMessage);
+      alert(errorMessage);
+      
+      // 알림이 표시되었음을 표시
+      alertShownRef.current = true;
+      
+      // state 초기화 - 이 코드는 한 번만 실행
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // 알림 표시 여부 초기화
+    alertShownRef.current = false;
+    
     setError('');
     
     if (!username || !password) {
@@ -37,7 +59,43 @@ export default function LoginPage() {
       navigate('/dashboard');
     } catch (err) {
       console.error('로그인 오류:', err);
-      setError('로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요.');
+      
+      // 에러 메시지 설정
+      let errorMessage;
+      
+      // Firebase 인증 오류 처리
+      if (err.code) {
+        switch (err.code) {
+          case 'auth/user-not-found':
+            errorMessage = '등록되지 않은 이메일입니다.';
+            break;
+          case 'auth/wrong-password':
+            errorMessage = '비밀번호가 일치하지 않습니다.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = '유효하지 않은 이메일 형식입니다.';
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = '네트워크 연결을 확인해주세요.';
+            break;
+          default:
+            errorMessage = '로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요.';
+        }
+      } else if (err.message) {
+        // 권한 관련 오류 등 커스텀 에러 메시지 사용
+        errorMessage = err.message;
+        
+        // 웹 권한 오류인 경우에만 알림 표시 (중복 방지)
+        if (err.message.includes('웹 대시보드 접근 권한이 없습니다') && !alertShownRef.current) {
+          errorMessage = '웹 대시보드 접근 권한이 없습니다. 관리자에게 문의하세요.';
+          alert(errorMessage);
+          alertShownRef.current = true;
+        }
+      } else {
+        errorMessage = '로그인 중 오류가 발생했습니다.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -51,14 +109,17 @@ export default function LoginPage() {
           <h2 className="text-2xl font-bold mb-6 text-center">로그인</h2>
           
           {error && (
-            <div className="mb-4 p-3 bg-red-100 text-red-800 rounded">
-              {error}
+            <div className="mb-4 p-3 bg-red-100 text-red-800 rounded border border-red-200 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span>{error}</span>
             </div>
           )}
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <input
-              type="email" // 이메일 형식으로 변경
+              type="email" 
               placeholder="이메일"
               value={username}
               onChange={e => setUsername(e.target.value)}
