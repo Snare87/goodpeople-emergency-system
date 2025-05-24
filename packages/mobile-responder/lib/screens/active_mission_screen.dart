@@ -1,4 +1,4 @@
-// lib/screens/active_mission_screen.dart
+// lib/screens/active_mission_screen.dart - 코드 경고 수정
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:geolocator/geolocator.dart';
@@ -22,7 +22,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
   Call? missionData;
   Position? userPosition;
   GoogleMapController? mapController;
-  Timer? _locationUpdateTimer;
   StreamSubscription? _callSubscription;
   final CallDataService _callDataService = CallDataService(); // 서비스 인스턴스 추가
 
@@ -89,31 +88,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
     } catch (e) {
       debugPrint('위치 정보를 가져오는데 실패했습니다: $e');
     }
-  }
-
-  // 주기적 위치 업데이트 시작
-  void _startLocationUpdates() {
-    _locationUpdateTimer = Timer.periodic(const Duration(seconds: 30), (
-      _,
-    ) async {
-      try {
-        final position = await Geolocator.getCurrentPosition();
-        setState(() {
-          userPosition = position;
-        });
-
-        // 사용자 위치 업데이트
-        if (missionData != null) {
-          db.ref("calls/${widget.callId}/responder").update({
-            "lat": position.latitude,
-            "lng": position.longitude,
-            "updatedAt": DateTime.now().toIso8601String(),
-          });
-        }
-      } catch (e) {
-        debugPrint('위치 업데이트 실패: $e');
-      }
-    });
   }
 
   // 카메라 업데이트
@@ -187,6 +161,8 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
     if (confirm != true) return;
 
     // 로딩 표시
+    if (!mounted) return; // mounted 체크 추가
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -210,41 +186,41 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
       final success = await _callDataService.completeCall(widget.callId);
 
       // 로딩 다이얼로그 닫기
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return; // mounted 체크 추가
+      Navigator.pop(context);
 
       if (success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("임무가 완료되었습니다!"),
-              backgroundColor: Colors.green,
-            ),
-          );
+        if (!mounted) return; // mounted 체크 추가
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("임무가 완료되었습니다!"),
+            backgroundColor: Colors.green,
+          ),
+        );
 
-          // 잠시 후 화면 닫기 (성공 메시지 보여줌)
-          Future.delayed(const Duration(seconds: 1), () {
-            if (mounted) Navigator.pop(context);
-          });
-        }
+        // 잠시 후 화면 닫기 (성공 메시지 보여줌)
+        Future.delayed(const Duration(seconds: 1), () {
+          if (!mounted) return; // mounted 체크 추가
+          Navigator.pop(context);
+        });
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("임무 완료 처리 중 오류가 발생했습니다."),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        if (!mounted) return; // mounted 체크 추가
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("임무 완료 처리 중 오류가 발생했습니다."),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (e) {
       // 로딩 다이얼로그 닫기
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return; // mounted 체크 추가
+      Navigator.pop(context);
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("오류가 발생했습니다: $e")));
-      }
+      if (!mounted) return; // mounted 체크 추가
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("오류가 발생했습니다: $e")));
     }
   }
 

@@ -1,4 +1,4 @@
-// lib/screens/login_screen.dart
+// lib/screens/login_screen.dart - 널 안전성 오류 수정
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -44,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint('✅ 로그인 성공: ${credential.user?.uid}');
 
       if (credential.user != null) {
-        // 2. 사용자 승인 상태 확인
+        // 2. 사용자 승인 상태 및 앱 사용 권한 확인
         final userSnapshot =
             await FirebaseDatabase.instance
                 .ref('users/${credential.user!.uid}')
@@ -54,14 +54,29 @@ class _LoginScreenState extends State<LoginScreen> {
           final userData = Map<String, dynamic>.from(userSnapshot.value as Map);
           final status = userData['status'] ?? 'pending';
 
-          debugPrint('👤 사용자 상태: $status');
+          // 앱 사용 권한 확인 로직 추가
+          final permissions = userData['permissions'] as Map?;
+          final hasAppPermission =
+              permissions != null && permissions['app'] == true;
+
+          debugPrint('👤 사용자 상태: $status, 앱 권한: $hasAppPermission');
 
           if (status == 'approved') {
-            // 승인된 사용자만 메인 화면으로 이동
-            if (mounted) {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const MainScreen()),
-              );
+            // 앱 사용 권한이 있는지 확인
+            if (hasAppPermission) {
+              // 승인된 사용자이면서 앱 권한이 있으면 메인 화면으로 이동
+              if (mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const MainScreen()),
+                );
+              }
+            } else {
+              // 앱 권한이 없으면 로그아웃 처리
+              await FirebaseAuth.instance.signOut();
+              setState(() {
+                _isLoading = false;
+                _errorMessage = '모바일 앱 사용 권한이 없습니다. 관리자에게 문의하세요.';
+              });
             }
           } else if (status == 'pending') {
             // 승인 대기중인 사용자
@@ -126,36 +141,44 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // 에러 색상 관련 도우미 메서드들
   Color _getErrorColor() {
-    if (_errorMessage?.contains('승인 대기') ?? false) {
+    if (_errorMessage != null && _errorMessage!.contains('승인 대기')) {
       return Colors.yellow[50]!;
-    } else if (_errorMessage?.contains('차단') ?? false) {
+    } else if (_errorMessage != null &&
+        (_errorMessage!.contains('차단') ||
+            _errorMessage!.contains('권한이 없습니다'))) {
       return Colors.red[50]!;
     }
     return Colors.red[50]!;
   }
 
   Color _getErrorBorderColor() {
-    if (_errorMessage?.contains('승인 대기') ?? false) {
+    if (_errorMessage != null && _errorMessage!.contains('승인 대기')) {
       return Colors.yellow[200]!;
-    } else if (_errorMessage?.contains('차단') ?? false) {
+    } else if (_errorMessage != null &&
+        (_errorMessage!.contains('차단') ||
+            _errorMessage!.contains('권한이 없습니다'))) {
       return Colors.red[300]!;
     }
     return Colors.red[200]!;
   }
 
   Color _getErrorTextColor() {
-    if (_errorMessage?.contains('승인 대기') ?? false) {
+    if (_errorMessage != null && _errorMessage!.contains('승인 대기')) {
       return Colors.yellow[800]!;
-    } else if (_errorMessage?.contains('차단') ?? false) {
+    } else if (_errorMessage != null &&
+        (_errorMessage!.contains('차단') ||
+            _errorMessage!.contains('권한이 없습니다'))) {
       return Colors.red[800]!;
     }
     return Colors.red[700]!;
   }
 
   IconData _getErrorIcon() {
-    if (_errorMessage?.contains('승인 대기') ?? false) {
+    if (_errorMessage != null && _errorMessage!.contains('승인 대기')) {
       return Icons.schedule;
-    } else if (_errorMessage?.contains('차단') ?? false) {
+    } else if (_errorMessage != null &&
+        (_errorMessage!.contains('차단') ||
+            _errorMessage!.contains('권한이 없습니다'))) {
       return Icons.block;
     }
     return Icons.error_outline;

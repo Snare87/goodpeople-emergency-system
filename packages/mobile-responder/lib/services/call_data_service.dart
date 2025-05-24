@@ -1,4 +1,4 @@
-// lib/services/call_data_service.dart - 원래 필터링 조건 복원
+// lib/services/call_data_service.dart - 불필요한 null-aware 연산자 수정
 import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';

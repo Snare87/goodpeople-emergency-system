@@ -1,56 +1,45 @@
-// src/App.js - 대원 관리 페이지 추가
+// src/App.js - 권한 기반 라우팅 적용
 
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import UserManagementPage from './pages/UserManagementPage';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-
-// 보호된 라우트 컴포넌트
-const ProtectedRoute = ({ children }) => {
-  const { isLoggedIn } = useAuth();
-  const location = useLocation();
-  
-  if (!isLoggedIn) {
-    return <Navigate to="/" state={{ from: location }} replace />;
-  }
-  
-  return children;
-};
-
-// 브라우저 라우터를 포함한 전체 앱 컴포넌트
-const AppRoutes = () => {
-  return (
-    <Routes>
-      <Route path="/" element={<LoginPage />} />
-      <Route 
-        path="/dashboard" 
-        element={
-          <ProtectedRoute>
-            <DashboardPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/users" 
-        element={
-          <ProtectedRoute>
-            <UserManagementPage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
-};
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // 최상위 App 컴포넌트
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <AppRoutes />
+        <Routes>
+          {/* 로그인 페이지 - 공개 접근 */}
+          <Route path="/" element={<LoginPage />} />
+          
+          {/* 대시보드 - 웹 권한 필요 */}
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute requiredPermission="web">
+                <DashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* 사용자 관리 - 웹 권한 + 관리자 권한 필요 */}
+          <Route 
+            path="/users" 
+            element={
+              <ProtectedRoute requiredPermission="admin">
+                <UserManagementPage />
+              </ProtectedRoute>
+            } 
+          />
+          
+          {/* 알 수 없는 경로 - 로그인 페이지로 리디렉션 */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </BrowserRouter>
     </AuthProvider>
   );
