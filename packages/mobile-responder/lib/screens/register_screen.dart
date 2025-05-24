@@ -1,4 +1,4 @@
-// lib/screens/register_screen.dart
+// packages/mobile-responder/lib/screens/register_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -24,17 +24,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _selectedDepartment = '전북소방본부';
   String _selectedRank = '소방사';
   String _selectedPosition = '화재진압대원';
-  List<String> _certifications = [];
+  List<String> _certifications = <String>[]; // 명시적 타입 지정
 
   bool _isLoading = false;
 
-  final List<String> _departments = ['전북소방본부'];
+  final List<String> _departments = <String>['전북소방본부']; // 명시적 타입 지정
 
-  final List<String> _ranks = ['소방사', '소방교', '소방장', '소방위', '소방경', '소방령', '소방정'];
+  final List<String> _ranks = <String>[
+    // 명시적 타입 지정
+    '소방사', '소방교', '소방장', '소방위', '소방경', '소방령', '소방정',
+  ];
 
-  final List<String> _positions = ['화재진압대원', '구조대원', '구급대원'];
+  final List<String> _positions = <String>[
+    // 명시적 타입 지정
+    '화재진압대원', '구조대원', '구급대원',
+  ];
 
-  final List<String> _availableCertifications = [
+  final List<String> _availableCertifications = <String>[
+    // 명시적 타입 지정
     '응급구조사 1급',
     '응급구조사 2급',
     '간호사',
@@ -95,57 +102,93 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
+      debugPrint('🔍 회원가입 시작...');
+
+      // 1. Firebase Authentication 계정 생성
       final credential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
             email: _emailController.text.trim(),
             password: _passwordController.text,
           );
 
-      if (credential.user != null) {
-        await FirebaseDatabase.instance
-            .ref('users/${credential.user!.uid}')
-            .set({
-              'email': _emailController.text.trim(),
-              'name': _nameController.text.trim(),
-              'phone': _phoneController.text.trim(),
-              'officialId': _officialIdController.text.trim(),
-              'department': _selectedDepartment,
-              'rank': _selectedRank,
-              'position': _selectedPosition,
-              'certifications': _certifications,
-              'status': 'pending',
-              'isOnDuty': false,
-              'locationEnabled': false,
-              'notificationEnabled': true,
-              'createdAt': DateTime.now().toIso8601String(),
-            });
+      debugPrint('✅ Authentication 성공: ${credential.user?.uid}');
 
-        if (mounted) {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder:
-                (context) => AlertDialog(
-                  title: const Text('회원가입 완료'),
-                  content: const Text(
-                    '회원가입이 완료되었습니다.\n관리자 승인 후 서비스를 이용하실 수 있습니다.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (_) => const LoginScreen(),
-                          ),
-                          (route) => false,
-                        );
-                      },
-                      child: const Text('확인'),
-                    ),
-                  ],
+      // 2. 사용자 데이터 준비 (타입 안전성 100% 확보)
+      final String userId = credential.user!.uid;
+      final Map<String, Object> userData = <String, Object>{
+        // Object 타입으로 명시
+        'email': _emailController.text.trim(),
+        'name': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'officialId': _officialIdController.text.trim(),
+        'department': _selectedDepartment,
+        'rank': _selectedRank,
+        'position': _selectedPosition,
+        'certifications':
+            _certifications.isEmpty
+                ? <String>[]
+                : _certifications.toList(), // toList()로 안전한 복사
+        'status': 'pending',
+        'isOnDuty': false,
+        'locationEnabled': false,
+        'notificationEnabled': true,
+        'createdAt': DateTime.now().toIso8601String(),
+        'statistics': <String, Object>{
+          // Object 타입으로 명시
+          'totalMissions': 0,
+          'completedMissions': 0,
+          'averageResponseTime': 0,
+          'specialties': <String, Object>{
+            // Object 타입으로 명시
+            '화재': 0,
+            '구조': 0,
+            '구급': 0,
+          },
+        },
+      };
+
+      debugPrint('🔍 Database 저장 시작...');
+      debugPrint('👤 사용자: ${userData['name']}');
+      debugPrint('📧 이메일: ${userData['email']}');
+
+      // 3. Realtime Database에 저장 (기존 설정 그대로 사용)
+      await FirebaseDatabase.instance.ref('users/$userId').set(userData);
+
+      debugPrint('✅ Database 저장 완료!');
+
+      // 4. 저장 확인 (선택사항)
+      final snapshot =
+          await FirebaseDatabase.instance.ref('users/$userId').get();
+
+      if (snapshot.exists) {
+        debugPrint('✅ 저장 검증 완료: ${snapshot.value}');
+      }
+
+      // 5. 성공 다이얼로그
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder:
+              (context) => AlertDialog(
+                title: const Text('회원가입 완료'),
+                content: const Text(
+                  '회원가입이 완료되었습니다.\n'
+                  '관리자 승인 후 서비스를 이용하실 수 있습니다.',
                 ),
-          );
-        }
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        (route) => false,
+                      );
+                    },
+                    child: const Text('확인'),
+                  ),
+                ],
+              ),
+        );
       }
     } on FirebaseAuthException catch (e) {
       setState(() {
@@ -153,22 +196,101 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
 
       String message;
-      if (e.code == 'weak-password') {
-        message = '비밀번호가 너무 약합니다. 8자 이상 입력해주세요.';
-      } else if (e.code == 'email-already-in-use') {
-        message = '이미 사용중인 이메일입니다.';
-      } else if (e.code == 'invalid-email') {
-        message = '유효하지 않은 이메일 형식입니다.';
-      } else {
-        message = '회원가입 중 오류가 발생했습니다: ${e.message}';
+      switch (e.code) {
+        case 'weak-password':
+          message = '비밀번호가 너무 약합니다. 8자 이상 입력해주세요.';
+          break;
+        case 'email-already-in-use':
+          message = '이미 사용중인 이메일입니다.';
+          break;
+        case 'invalid-email':
+          message = '유효하지 않은 이메일 형식입니다.';
+          break;
+        default:
+          message = '회원가입 중 오류가 발생했습니다: ${e.message}';
       }
 
+      debugPrint('❌ Auth 오류: ${e.code}');
       _showErrorDialog(message);
-    } catch (e) {
+    } catch (e, stackTrace) {
       setState(() {
         _isLoading = false;
       });
-      _showErrorDialog('알 수 없는 오류가 발생했습니다: $e');
+
+      debugPrint('❌ 오류 발생: $e');
+      debugPrint(
+        '📍 스택트레이스: ${stackTrace.toString().split('\n').take(5).join('\n')}',
+      );
+
+      // PigeonUserDetails 오류를 무시하고 성공으로 처리
+      if (e.toString().contains('PigeonUserDetails') ||
+          e.toString().contains('type cast')) {
+        debugPrint('⚠️ 타입 캐스팅 오류 무시 - 성공으로 처리');
+
+        // 현재 로그인된 사용자 확인
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser != null) {
+          debugPrint('✅ 사용자 로그인 확인됨: ${currentUser.uid}');
+
+          // Database 저장 재시도
+          try {
+            final userData = <String, Object>{
+              'email': _emailController.text.trim(),
+              'name': _nameController.text.trim(),
+              'phone': _phoneController.text.trim(),
+              'officialId': _officialIdController.text.trim(),
+              'department': _selectedDepartment,
+              'rank': _selectedRank,
+              'position': _selectedPosition,
+              'certifications': _certifications.toList(),
+              'status': 'pending',
+              'isOnDuty': false,
+              'locationEnabled': false,
+              'notificationEnabled': true,
+              'createdAt': DateTime.now().toIso8601String(),
+            };
+
+            await FirebaseDatabase.instance
+                .ref('users/${currentUser.uid}')
+                .set(userData);
+
+            debugPrint('✅ 백업 저장 성공!');
+
+            if (mounted) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder:
+                    (context) => AlertDialog(
+                      title: const Text('회원가입 완료'),
+                      content: const Text(
+                        '회원가입이 완료되었습니다.\n'
+                        '관리자 승인 후 서비스를 이용하실 수 있습니다.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                builder: (_) => const LoginScreen(),
+                              ),
+                              (route) => false,
+                            );
+                          },
+                          child: const Text('확인'),
+                        ),
+                      ],
+                    ),
+              );
+            }
+            return; // 성공으로 종료
+          } catch (dbError) {
+            debugPrint('❌ 백업 저장도 실패: $dbError');
+          }
+        }
+      }
+
+      _showErrorDialog('회원가입 처리 중 오류가 발생했습니다.\n잠시 후 다시 시도해주세요.');
     }
   }
 
@@ -258,25 +380,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _nameController,
                   decoration: const InputDecoration(
                     labelText: '이름',
-                    hintText: '한글만 입력 가능',
+                    hintText: '한글 이름을 입력하세요',
                     border: OutlineInputBorder(),
                     prefixIcon: Icon(Icons.person),
                   ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[가-힣]')),
-                  ],
+                  // inputFormatters 제거 - 한글 입력 문제 해결
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return '이름을 입력해주세요';
                     }
-                    if (!RegExp(r'^[가-힣]+$').hasMatch(value)) {
+                    final trimmedValue = value.trim();
+                    if (!RegExp(r'^[가-힣\s]+$').hasMatch(trimmedValue)) {
                       return '한글만 입력 가능합니다';
                     }
-                    if (value.contains(' ')) {
-                      return '공백은 입력할 수 없습니다';
-                    }
-                    if (value.length < 2) {
+                    if (trimmedValue.replaceAll(' ', '').length < 2) {
                       return '이름은 2자 이상이어야 합니다';
+                    }
+                    if (trimmedValue.length > 10) {
+                      return '이름은 10자 이하로 입력해주세요';
                     }
                     return null;
                   },
@@ -416,11 +537,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             onChanged: (bool? value) {
                               setState(() {
                                 if (value == true) {
-                                  _certifications.add(cert);
+                                  if (!_certifications.contains(cert)) {
+                                    _certifications.add(cert);
+                                  }
                                 } else {
                                   _certifications.remove(cert);
                                 }
                               });
+
+                              // 디버깅용 출력
+                              debugPrint('🏆 선택된 자격증: $_certifications');
+                              debugPrint(
+                                '🏆 자격증 타입: ${_certifications.runtimeType}',
+                              );
                             },
                           );
                         }).toList(),
