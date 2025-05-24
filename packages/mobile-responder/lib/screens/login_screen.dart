@@ -1,9 +1,9 @@
 // lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:goodpeople_responder/screens/main_screen.dart';
 import 'package:goodpeople_responder/screens/register_screen.dart';
-import 'package:goodpeople_responder/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,60 +20,83 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
 
-  // 서비스 인스턴스
-  final _authService = AuthService();
-
   @override
   void initState() {
     super.initState();
     // 테스트 로그인 정보 채우기
     _emailController.text = 'admin@korea.kr';
     _passwordController.text = 'admin1234';
-
-    // 초기 상태 설정 - 기존 세션이 있으면 로그아웃
-    _checkAndClearExistingSession();
-  }
-
-  // 기존 세션 확인 및 정리
-  Future<void> _checkAndClearExistingSession() async {
-    try {
-      if (_authService.isLoggedIn) {
-        await _authService.logout();
-        debugPrint('기존 세션 로그아웃 완료');
-      }
-    } catch (e) {
-      debugPrint('세션 정리 오류: $e');
-    }
   }
 
   // 로그인 처리
   Future<void> _login() async {
-    // 폼 검증
     if (!_formKey.currentState!.validate()) return;
 
-    // 로딩 상태 설정
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      // 1. 인증 서비스를 통한 로그인
-      final credential = await _authService.login(
-        _emailController.text.trim(),
-        _passwordController.text,
+      // 1. Firebase Auth로 로그인
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
-      // 2. 로그인 성공 시 메인 화면으로 이동
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainScreen()),
-        );
+      debugPrint('✅ 로그인 성공: ${credential.user?.uid}');
+
+      if (credential.user != null) {
+        // 2. 사용자 승인 상태 확인
+        final userSnapshot =
+            await FirebaseDatabase.instance
+                .ref('users/${credential.user!.uid}')
+                .get();
+
+        if (userSnapshot.exists) {
+          final userData = Map<String, dynamic>.from(userSnapshot.value as Map);
+          final status = userData['status'] ?? 'pending';
+
+          debugPrint('👤 사용자 상태: $status');
+
+          if (status == 'approved') {
+            // 승인된 사용자만 메인 화면으로 이동
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const MainScreen()),
+              );
+            }
+          } else if (status == 'pending') {
+            // 승인 대기중인 사용자
+            await FirebaseAuth.instance.signOut(); // 로그아웃 처리
+
+            setState(() {
+              _isLoading = false;
+              _errorMessage = '승인 대기중입니다. 관리자 승인 후 이용 가능합니다.';
+            });
+          } else if (status == 'rejected') {
+            // 거부된 사용자
+            await FirebaseAuth.instance.signOut(); // 로그아웃 처리
+
+            setState(() {
+              _isLoading = false;
+              _errorMessage = '계정이 차단되었습니다. 관리자에게 문의하세요.';
+            });
+          }
+        } else {
+          // 사용자 정보가 없는 경우
+          await FirebaseAuth.instance.signOut();
+
+          setState(() {
+            _isLoading = false;
+            _errorMessage = '사용자 정보를 찾을 수 없습니다.';
+          });
+        }
       }
     } on FirebaseAuthException catch (e) {
-      // 3. Firebase 인증 오류 처리
-      String message;
+      debugPrint('❌ Firebase Auth 오류: ${e.code} - ${e.message}');
 
+      String message;
       switch (e.code) {
         case 'user-not-found':
           message = '등록되지 않은 이메일입니다.';
@@ -84,14 +107,11 @@ class _LoginScreenState extends State<LoginScreen> {
         case 'invalid-email':
           message = '유효하지 않은 이메일 형식입니다.';
           break;
-        case 'user-disabled':
-          message = '비활성화된 계정입니다.';
-          break;
-        case 'too-many-requests':
-          message = '너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요.';
+        case 'network-request-failed':
+          message = '네트워크 연결을 확인해주세요.';
           break;
         default:
-          message = '로그인 오류: ${e.message}';
+          message = '로그인 실패: ${e.message}';
       }
 
       setState(() {
@@ -99,30 +119,49 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      // 4. 일반 오류 처리
+      debugPrint('❌ 일반 오류: $e');
       setState(() {
-        _errorMessage = '로그인 중 오류가 발생했습니다: $e';
+        _errorMessage = '로그인 중 오류가 발생했습니다.';
         _isLoading = false;
       });
-
-      // 5. admin 계정 예외 처리 (백업 로직)
-      if (_emailController.text.trim() == 'admin@korea.kr') {
-        try {
-          debugPrint('백업 처리: admin 계정은 직접 메인 화면으로 이동');
-
-          // 잠시 지연 후 메인 화면으로 이동
-          await Future.delayed(const Duration(seconds: 1));
-
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const MainScreen()),
-            );
-          }
-        } catch (e) {
-          debugPrint('백업 처리 실패: $e');
-        }
-      }
     }
+  }
+
+  // 에러 색상 관련 도우미 메서드들
+  Color _getErrorColor() {
+    if (_errorMessage?.contains('승인 대기') ?? false) {
+      return Colors.yellow[50]!;
+    } else if (_errorMessage?.contains('차단') ?? false) {
+      return Colors.red[50]!;
+    }
+    return Colors.red[50]!;
+  }
+
+  Color _getErrorBorderColor() {
+    if (_errorMessage?.contains('승인 대기') ?? false) {
+      return Colors.yellow[200]!;
+    } else if (_errorMessage?.contains('차단') ?? false) {
+      return Colors.red[300]!;
+    }
+    return Colors.red[200]!;
+  }
+
+  Color _getErrorTextColor() {
+    if (_errorMessage?.contains('승인 대기') ?? false) {
+      return Colors.yellow[800]!;
+    } else if (_errorMessage?.contains('차단') ?? false) {
+      return Colors.red[800]!;
+    }
+    return Colors.red[700]!;
+  }
+
+  IconData _getErrorIcon() {
+    if (_errorMessage?.contains('승인 대기') ?? false) {
+      return Icons.schedule;
+    } else if (_errorMessage?.contains('차단') ?? false) {
+      return Icons.block;
+    }
+    return Icons.error_outline;
   }
 
   @override
@@ -171,6 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: Icon(Icons.email),
                     ),
                     keyboardType: TextInputType.emailAddress,
+                    enabled: !_isLoading,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return '이메일을 입력해주세요';
@@ -189,6 +229,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: Icon(Icons.lock),
                     ),
                     obscureText: true,
+                    enabled: !_isLoading,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return '비밀번호를 입력해주세요';
@@ -204,14 +245,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: Colors.red[50],
+                        color: _getErrorColor(),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red[200]!),
+                        border: Border.all(color: _getErrorBorderColor()),
                       ),
-                      child: Text(
-                        _errorMessage!,
-                        style: TextStyle(color: Colors.red[700]),
-                        textAlign: TextAlign.center,
+                      child: Row(
+                        children: [
+                          Icon(
+                            _getErrorIcon(),
+                            color: _getErrorTextColor(),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: TextStyle(color: _getErrorTextColor()),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
 
@@ -225,8 +277,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     child:
                         _isLoading
-                            ? const CircularProgressIndicator(
-                              color: Colors.white,
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
                             )
                             : const Text('로그인'),
                   ),

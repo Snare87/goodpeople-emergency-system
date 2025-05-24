@@ -30,7 +30,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
   bool accepting = false;
   final db = FirebaseDatabase.instance;
   Map<String, dynamic>? callDetails;
-  Position? userPosition;
+  Position? userPosition; // 클래스 멤버 변수로 이미 선언됨
   double? distanceToSite;
   GoogleMapController? mapController;
   Timer? _timeUpdateTimer;
@@ -155,7 +155,20 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         }
       }
 
-      // 2. 일반적인 수락 처리
+      // 2. 사용자 정보 가져오기
+      final userSnapshot =
+          await FirebaseDatabase.instance.ref('users/${currentUser.uid}').get();
+
+      String userName = "대원";
+      String userPositionName = "대원"; // 변수명 변경 (userPosition과 충돌 방지)
+
+      if (userSnapshot.exists) {
+        final userData = Map<String, dynamic>.from(userSnapshot.value as Map);
+        userName = userData['name'] ?? "대원";
+        userPositionName = userData['position'] ?? "대원"; // 변수명 변경
+      }
+
+      // 3. 일반적인 수락 처리
       final responderRef = db.ref("calls/${widget.callId}");
 
       await responderRef.update({
@@ -164,10 +177,11 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         "responder": {
           "id":
               "resp_${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}",
-          "name": "테스트대원",
-          "position": "구조대원",
-          "lat": userPosition?.latitude,
-          "lng": userPosition?.longitude,
+          "name": userName,
+          "position": userPositionName, // 변수명 변경
+          "lat": userPosition?.latitude, // Position 타입의 latitude
+          "lng": userPosition?.longitude, // Position 타입의 longitude
+          "updatedAt": DateTime.now().millisecondsSinceEpoch,
         },
       });
 

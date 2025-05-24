@@ -176,6 +176,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 actions: [
                   TextButton(
                     onPressed: () {
+                      // Navigator.of(context).pop(); 먼저 다이얼로그 닫기
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(builder: (_) => const LoginScreen()),
                         (route) => false,
