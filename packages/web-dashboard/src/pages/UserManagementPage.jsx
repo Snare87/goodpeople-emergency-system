@@ -77,6 +77,13 @@ export default function UserManagementPage() {
     return <span className={`px-2 py-1 ${colorClass} rounded-md text-sm font-medium`}>{rank}</span>;
   };
 
+  // 통계 카드 클릭 이벤트 핸들러
+  const handleStatCardClick = (status) => {
+    setFilter(status);
+    // 맨 위로 스크롤
+    window.scrollTo(0, 0);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -238,28 +245,40 @@ export default function UserManagementPage() {
           </div>
         </div>
 
-        {/* 통계 카드 */}
+        {/* 통계 카드 - 클릭 이벤트 추가 */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div 
+            className="bg-white p-6 rounded-lg shadow cursor-pointer hover:bg-gray-50"
+            onClick={() => handleStatCardClick('all')}
+          >
             <div className="text-2xl font-bold text-gray-900">{users.length}</div>
             <div className="text-sm text-gray-500">전체 가입자</div>
             <div className="text-xs text-gray-400 mt-1">승인 + 대기 + 차단</div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div 
+            className="bg-white p-6 rounded-lg shadow cursor-pointer hover:bg-gray-50"
+            onClick={() => handleStatCardClick('approved')}
+          >
             <div className="text-2xl font-bold text-green-600">
               {users.filter(u => u.status === 'approved').length}
             </div>
             <div className="text-sm text-gray-500">활동 가능 대원</div>
             <div className="text-xs text-gray-400 mt-1">승인 완료</div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div 
+            className="bg-white p-6 rounded-lg shadow cursor-pointer hover:bg-gray-50"
+            onClick={() => handleStatCardClick('pending')}
+          >
             <div className="text-2xl font-bold text-yellow-600">
               {users.filter(u => u.status === 'pending').length}
             </div>
             <div className="text-sm text-gray-500">승인 대기</div>
             <div className="text-xs text-gray-400 mt-1">검토 필요</div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div 
+            className="bg-white p-6 rounded-lg shadow cursor-pointer hover:bg-gray-50"
+            onClick={() => handleStatCardClick('rejected')}
+          >
             <div className="text-2xl font-bold text-red-600">
               {users.filter(u => u.status === 'rejected').length}
             </div>

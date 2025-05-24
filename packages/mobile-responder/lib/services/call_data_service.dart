@@ -13,6 +13,11 @@ class CallDataService {
   final DatabaseReference _callsRef = FirebaseDatabase.instance.ref('calls');
   StreamController<List<Call>>? _callsController;
 
+  // 사용자 활성 임무를 관찰하는 전역 컨트롤러 추가
+  final StreamController<bool> _activeStatusController =
+      StreamController<bool>.broadcast();
+  Stream<bool> get activeStatusStream => _activeStatusController.stream;
+
   // 오류 처리 기능 강화
   void _handleError(Object error, StackTrace stackTrace) {
     debugPrint('CallDataService 오류: $error');
@@ -139,6 +144,10 @@ class CallDataService {
             final data = event.snapshot.value;
             debugPrint('[CallDataService] 활성 임무 데이터 변경 감지!');
             final activeMissions = _processActiveMissionData(data, userId);
+
+            // 활성 임무 유무 상태 전파
+            _activeStatusController.add(activeMissions.isNotEmpty);
+
             activeMissionsController?.add(activeMissions);
           } catch (error, stackTrace) {
             debugPrint('[CallDataService] 활성 임무 처리 오류: $error');
@@ -255,13 +264,17 @@ class CallDataService {
     }
   }
 
-  // 재난 완료 (기존 로직 유지)
+  // 재난 완료 (수정됨)
   Future<bool> completeCall(String callId) async {
     try {
       await _callsRef.child(callId).update({
         'status': 'completed',
         'completedAt': DateTime.now().millisecondsSinceEpoch,
       });
+
+      // 완료 후 활성 상태 업데이트 브로드캐스트
+      _activeStatusController.add(false);
+
       debugPrint('[CallDataService] 재난 완료 성공: $callId');
       return true;
     } catch (e) {
@@ -338,6 +351,14 @@ class CallDataService {
     }
   }
 
+  // 현재 사용자가 활성 임무를 가지고 있는지 여부를 스트림으로 제공
+  Stream<bool> hasActiveMissionStream(String userId) {
+    // 스트림 변환: 활성 임무 목록 스트림 -> 불리언 스트림
+    return getActiveMissionsStream(
+      userId,
+    ).map((missions) => missions.isNotEmpty);
+  }
+
   // 현재 사용자의 활성 임무 정보 가져오기 (수정된 버전)
   Future<Call?> getCurrentActiveMission(String userId) async {
     try {
@@ -376,6 +397,7 @@ class CallDataService {
   void dispose() {
     _callsController?.close();
     _callsController = null;
+    _activeStatusController.close();
     debugPrint('[CallDataService] 리소스 정리 완료');
   }
 }

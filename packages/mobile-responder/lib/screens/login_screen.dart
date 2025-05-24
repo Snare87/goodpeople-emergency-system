@@ -23,9 +23,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // 테스트 로그인 정보 채우기
-    _emailController.text = 'admin@korea.kr';
-    _passwordController.text = 'admin1234';
   }
 
   // 로그인 처리

@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:goodpeople_responder/models/call.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:goodpeople_responder/services/location_service.dart';
+import 'package:goodpeople_responder/services/call_data_service.dart'; // CallDataService 추가
 import 'dart:async';
 
 class ActiveMissionScreen extends StatefulWidget {
@@ -23,6 +24,7 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
   GoogleMapController? mapController;
   Timer? _locationUpdateTimer;
   StreamSubscription? _callSubscription;
+  final CallDataService _callDataService = CallDataService(); // 서비스 인스턴스 추가
 
   @override
   void initState() {
@@ -159,24 +161,85 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
     }
   }
 
-  // 임무 완료 처리
+  // 임무 완료 처리 - 수정됨
   Future<void> _completeMission() async {
+    // 확인 다이얼로그 표시
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('임무 완료'),
+            content: const Text('정말 이 임무를 완료하시겠습니까?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('취소'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                child: const Text('완료'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirm != true) return;
+
+    // 로딩 표시
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text("임무 완료 처리 중..."),
+              ],
+            ),
+          ),
+    );
+
     // 위치 추적 중지
     LocationService().stopTracking();
 
     try {
-      await db.ref("calls/${widget.callId}").update({
-        "status": "completed",
-        "completedAt": DateTime.now().millisecondsSinceEpoch,
-      });
+      // CallDataService를 통해 완료 처리
+      final success = await _callDataService.completeCall(widget.callId);
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("임무가 완료되었습니다!")));
-        Navigator.pop(context);
+      // 로딩 다이얼로그 닫기
+      if (mounted) Navigator.pop(context);
+
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("임무가 완료되었습니다!"),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // 잠시 후 화면 닫기 (성공 메시지 보여줌)
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) Navigator.pop(context);
+          });
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("임무 완료 처리 중 오류가 발생했습니다."),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
+      // 로딩 다이얼로그 닫기
+      if (mounted) Navigator.pop(context);
+
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -288,6 +351,37 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
+
+                          // 상세 정보 표시 (있을 경우)
+                          if (missionData!.info != null &&
+                              missionData!.info!.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.red[50],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red[200]!),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '상황 정보:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red[800],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    missionData!.info!,
+                                    style: TextStyle(color: Colors.red[700]),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
 
                           // 경과 시간
                           if (missionData!.acceptedAt != null)

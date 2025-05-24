@@ -1,4 +1,4 @@
-// lib/screens/home_screen.dart - 성능 및 버그 개선
+// packages/mobile-responder/lib/screens/home_screen.dart - 성능 및 버그 개선
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -28,6 +28,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String _filterType = "전체";
   Position? _currentPosition;
   StreamSubscription? _callsSubscription;
+  StreamSubscription? _activeMissionSubscription; // 활성 임무 구독 추가
+  bool _hasActiveMission = false; // 활성 임무 상태 추가
 
   @override
   void initState() {
@@ -40,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     debugPrint('[HomeScreen] dispose 호출됨');
     _callsSubscription?.cancel();
+    _activeMissionSubscription?.cancel(); // 활성 임무 구독 취소
     super.dispose();
   }
 
@@ -47,6 +50,27 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _initializeScreen() async {
     await _getCurrentPosition();
     _loadCalls();
+    _subscribeToActiveMissions(); // 활성 임무 상태 구독
+  }
+
+  // 활성 임무 상태 구독 함수 추가
+  void _subscribeToActiveMissions() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      _activeMissionSubscription = _callDataService
+          .hasActiveMissionStream(currentUser.uid)
+          .listen((hasActive) {
+            if (mounted) {
+              setState(() {
+                _hasActiveMission = hasActive;
+              });
+              debugPrint('[HomeScreen] 활성 임무 상태 변경: $hasActive');
+
+              // 상태가 변경되면 필터 재적용
+              _applyCurrentFilter();
+            }
+          });
+    }
   }
 
   // 현재 위치 가져오기
@@ -234,6 +258,30 @@ class _HomeScreenState extends State<HomeScreen> {
         // 필터 영역
         _buildFilterSection(),
 
+        // 활성 임무 상태 배너 추가
+        if (_hasActiveMission)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.orange[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange[200]!),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber, color: Colors.orange[700], size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '현재 진행 중인 임무가 있습니다. 완료 후 새 임무를 수락할 수 있습니다.',
+                    style: TextStyle(color: Colors.orange[800], fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // 재난 목록 영역
         Expanded(child: _buildCallsList()),
       ],
@@ -294,6 +342,7 @@ class _HomeScreenState extends State<HomeScreen> {
             call: call,
             currentPosition: _currentPosition,
             onTap: () => _navigateToDetail(call),
+            hasActiveMission: _hasActiveMission, // 활성 임무 상태 전달
           );
         },
       ),
@@ -352,12 +401,14 @@ class CallCard extends StatefulWidget {
   final Call call;
   final Position? currentPosition;
   final VoidCallback onTap;
+  final bool hasActiveMission; // 활성 임무 상태 추가
 
   const CallCard({
     super.key,
     required this.call,
     this.currentPosition,
     required this.onTap,
+    this.hasActiveMission = false, // 기본값 false
   });
 
   @override
@@ -367,12 +418,10 @@ class CallCard extends StatefulWidget {
 class _CallCardState extends State<CallCard> {
   late Timer _timer;
   DateTime _currentTime = DateTime.now();
-  bool _hasActiveMission = false;
 
   @override
   void initState() {
     super.initState();
-    _checkActiveMission();
     _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (mounted) {
         setState(() {
@@ -388,31 +437,12 @@ class _CallCardState extends State<CallCard> {
     super.dispose();
   }
 
-  // 활성 임무 확인
-  void _checkActiveMission() async {
-    try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
-        final hasActive = await CallDataService().hasActiveMission(
-          currentUser.uid,
-        );
-        if (mounted) {
-          setState(() {
-            _hasActiveMission = hasActive;
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('[CallCard] 활성 임무 확인 오류: $e');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       // 활성 임무가 있으면 비활성화 표시
-      color: _hasActiveMission ? Colors.grey[100] : null,
+      color: widget.hasActiveMission ? Colors.grey[100] : null,
       child: InkWell(
         onTap: widget.onTap,
         child: Padding(
@@ -425,7 +455,7 @@ class _CallCardState extends State<CallCard> {
                   Icon(
                     _getEventTypeIcon(widget.call.eventType),
                     color:
-                        _hasActiveMission
+                        widget.hasActiveMission
                             ? Colors.grey
                             : _getEventTypeColor(widget.call.eventType),
                     size: 28,
@@ -436,7 +466,7 @@ class _CallCardState extends State<CallCard> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: _hasActiveMission ? Colors.grey : null,
+                      color: widget.hasActiveMission ? Colors.grey : null,
                     ),
                   ),
                   const Spacer(),
@@ -446,7 +476,9 @@ class _CallCardState extends State<CallCard> {
                       _formatDistance(widget.call.distance),
                       style: TextStyle(
                         color:
-                            _hasActiveMission ? Colors.grey : Colors.grey[600],
+                            widget.hasActiveMission
+                                ? Colors.grey
+                                : Colors.grey[600],
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -457,7 +489,7 @@ class _CallCardState extends State<CallCard> {
                 widget.call.address,
                 style: TextStyle(
                   fontSize: 16,
-                  color: _hasActiveMission ? Colors.grey : null,
+                  color: widget.hasActiveMission ? Colors.grey : null,
                 ),
               ),
 
@@ -470,11 +502,14 @@ class _CallCardState extends State<CallCard> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: _hasActiveMission ? Colors.grey[50] : Colors.red[50],
+                    color:
+                        widget.hasActiveMission
+                            ? Colors.grey[50]
+                            : Colors.red[50],
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
                       color:
-                          _hasActiveMission
+                          widget.hasActiveMission
                               ? Colors.grey[300]!
                               : Colors.red[200]!,
                     ),
@@ -485,7 +520,9 @@ class _CallCardState extends State<CallCard> {
                         Icons.info_outline,
                         size: 14,
                         color:
-                            _hasActiveMission ? Colors.grey : Colors.red[600],
+                            widget.hasActiveMission
+                                ? Colors.grey
+                                : Colors.red[600],
                       ),
                       const SizedBox(width: 4),
                       Expanded(
@@ -496,7 +533,7 @@ class _CallCardState extends State<CallCard> {
                           style: TextStyle(
                             fontSize: 12,
                             color:
-                                _hasActiveMission
+                                widget.hasActiveMission
                                     ? Colors.grey
                                     : Colors.red[700],
                             fontWeight: FontWeight.w500,
@@ -519,7 +556,7 @@ class _CallCardState extends State<CallCard> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: _hasActiveMission ? Colors.grey : null,
+                      color: widget.hasActiveMission ? Colors.grey : null,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -527,7 +564,10 @@ class _CallCardState extends State<CallCard> {
                     _getElapsedTime(widget.call.startAt),
                     style: TextStyle(
                       fontSize: 12,
-                      color: _hasActiveMission ? Colors.grey : Colors.grey[600],
+                      color:
+                          widget.hasActiveMission
+                              ? Colors.grey
+                              : Colors.grey[600],
                     ),
                   ),
                 ],
@@ -537,32 +577,32 @@ class _CallCardState extends State<CallCard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    _hasActiveMission ? '다른 임무 진행중' : '수락 대기 중',
+                    widget.hasActiveMission ? '다른 임무 진행중' : '수락 대기 중',
                     style: TextStyle(
                       color:
-                          _hasActiveMission
+                          widget.hasActiveMission
                               ? Colors.grey
                               : Colors.deepOrangeAccent,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   ElevatedButton(
-                    onPressed: _hasActiveMission ? null : widget.onTap,
+                    onPressed: widget.hasActiveMission ? null : widget.onTap,
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
-                          _hasActiveMission ? Colors.grey : Colors.red,
+                          widget.hasActiveMission ? Colors.grey : Colors.red,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 8,
                       ),
                     ),
-                    child: Text(_hasActiveMission ? '수락불가' : '상세보기'),
+                    child: Text(widget.hasActiveMission ? '수락불가' : '상세보기'),
                   ),
                 ],
               ),
 
               // 활성 임무가 있을 때 안내 메시지
-              if (_hasActiveMission) ...[
+              if (widget.hasActiveMission) ...[
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(8),
