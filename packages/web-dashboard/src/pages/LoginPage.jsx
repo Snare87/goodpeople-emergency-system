@@ -1,6 +1,6 @@
 // src/pages/LoginPage.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Button from '../components/Button';
 import Header from '../components/Header';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,9 +12,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   
   const navigate = useNavigate();
-  const location = useLocation();
   const { login, isLoggedIn } = useAuth();
-  const errorShownRef = useRef(false);
   
   // 이미 로그인한 경우 대시보드로 리다이렉트
   useEffect(() => {
@@ -22,23 +20,10 @@ export default function LoginPage() {
       navigate('/dashboard');
     }
   }, [isLoggedIn, navigate]);
-  
-  // URL 상태에서 오류 메시지 확인 
-  useEffect(() => {
-    // 권한 오류가 있고 아직 표시하지 않았으면
-    if (location.state?.authError && !errorShownRef.current) {
-      setError(location.state.authError);
-      errorShownRef.current = true;
-      
-      // 브라우저 히스토리에서 state 제거 (지연 없이)
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    errorShownRef.current = false;
     
     if (!username || !password) {
       return setError('아이디와 비밀번호를 모두 입력해주세요.');
@@ -51,7 +36,7 @@ export default function LoginPage() {
     } catch (err) {
       console.error('로그인 오류:', err);
       
-      // 에러 메시지 설정
+      // 에러 메시지 설정 (알림창은 AuthContext에서 이미 표시됨)
       let errorMessage;
       
       // Firebase 인증 오류 처리
@@ -73,7 +58,6 @@ export default function LoginPage() {
             errorMessage = '로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요.';
         }
       } else if (err.message) {
-        // 권한 관련 오류 등 커스텀 에러 메시지 사용
         errorMessage = err.message;
       } else {
         errorMessage = '로그인 중 오류가 발생했습니다.';

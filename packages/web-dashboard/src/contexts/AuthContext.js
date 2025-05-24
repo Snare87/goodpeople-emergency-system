@@ -16,9 +16,8 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState(null);
 
-  // 로그인 함수 - 알림 표시 없음
+  // 로그인 함수
   async function login(email, password) {
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
@@ -39,6 +38,8 @@ export function AuthProvider({ children }) {
         // 웹 권한이 없으면 권한 오류 발생
         if (!userData.permissions?.web) {
           await signOut(auth);
+          // 여기서 alert 띄우기
+          alert('웹 대시보드 접근 권한이 없습니다. 관리자에게 문의하세요.');
           throw new Error('웹 대시보드 접근 권한이 없습니다.');
         }
       } else {
@@ -124,9 +125,7 @@ export function AuthProvider({ children }) {
     isLoggedIn: !!currentUser,
     isAdmin: userProfile?.roles?.includes('admin') === true,
     isDispatcher: userProfile?.roles?.includes('dispatcher') === true,
-    loadUserProfile,
-    authError,
-    setAuthError
+    loadUserProfile
   };
 
   return (
