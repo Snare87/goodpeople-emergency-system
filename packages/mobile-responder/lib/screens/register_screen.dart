@@ -27,6 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   List<String> _certifications = <String>[]; // 명시적 타입 지정
 
   bool _isLoading = false;
+  String? _errorMessage;
 
   final List<String> _departments = <String>['전북소방본부']; // 명시적 타입 지정
 
@@ -99,6 +100,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
     try {
@@ -115,8 +117,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       // 2. 사용자 데이터 준비 (타입 안전성 100% 확보)
       final String userId = credential.user!.uid;
-      final Map<String, Object> userData = <String, Object>{
-        // Object 타입으로 명시
+      final Map<String, dynamic> userData = {
+        // 모든 값을 명시적으로 변환하여 타입 안전성 확보
         'email': _emailController.text.trim(),
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
@@ -127,23 +129,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'certifications':
             _certifications.isEmpty
                 ? <String>[]
-                : _certifications.toList(), // toList()로 안전한 복사
+                : List<String>.from(_certifications),
         'status': 'pending',
         'isOnDuty': false,
         'locationEnabled': false,
         'notificationEnabled': true,
         'createdAt': DateTime.now().toIso8601String(),
-        'statistics': <String, Object>{
-          // Object 타입으로 명시
+        'statistics': {
           'totalMissions': 0,
           'completedMissions': 0,
           'averageResponseTime': 0,
-          'specialties': <String, Object>{
-            // Object 타입으로 명시
-            '화재': 0,
-            '구조': 0,
-            '구급': 0,
-          },
+          'specialties': {'화재': 0, '구조': 0, '구급': 0},
         },
       };
 
@@ -151,20 +147,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
       debugPrint('👤 사용자: ${userData['name']}');
       debugPrint('📧 이메일: ${userData['email']}');
 
-      // 3. Realtime Database에 저장 (기존 설정 그대로 사용)
+      // 3. Realtime Database에 저장
       await FirebaseDatabase.instance.ref('users/$userId').set(userData);
-
       debugPrint('✅ Database 저장 완료!');
 
       // 4. 저장 확인 (선택사항)
       final snapshot =
           await FirebaseDatabase.instance.ref('users/$userId').get();
-
       if (snapshot.exists) {
         debugPrint('✅ 저장 검증 완료: ${snapshot.value}');
       }
 
-      // 5. 성공 다이얼로그
+      // 5. 로그아웃 처리 (회원가입 후 관리자 승인 대기)
+      await FirebaseAuth.instance.signOut();
+
+      // 6. 성공 다이얼로그
       if (mounted) {
         showDialog(
           context: context,
@@ -191,6 +188,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
       }
     } on FirebaseAuthException catch (e) {
+      debugPrint('❌ Firebase Auth 오류: ${e.code} - ${e.message}');
+
       setState(() {
         _isLoading = false;
       });
@@ -210,87 +209,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
           message = '회원가입 중 오류가 발생했습니다: ${e.message}';
       }
 
-      debugPrint('❌ Auth 오류: ${e.code}');
-      _showErrorDialog(message);
-    } catch (e, stackTrace) {
+      setState(() {
+        _errorMessage = message;
+      });
+    } catch (e) {
+      debugPrint('❌ 일반 오류: $e');
+
       setState(() {
         _isLoading = false;
+        _errorMessage = '회원가입 처리 중 오류가 발생했습니다.\n잠시 후 다시 시도해주세요.';
       });
-
-      debugPrint('❌ 오류 발생: $e');
-      debugPrint(
-        '📍 스택트레이스: ${stackTrace.toString().split('\n').take(5).join('\n')}',
-      );
-
-      // PigeonUserDetails 오류를 무시하고 성공으로 처리
-      if (e.toString().contains('PigeonUserDetails') ||
-          e.toString().contains('type cast')) {
-        debugPrint('⚠️ 타입 캐스팅 오류 무시 - 성공으로 처리');
-
-        // 현재 로그인된 사용자 확인
-        final currentUser = FirebaseAuth.instance.currentUser;
-        if (currentUser != null) {
-          debugPrint('✅ 사용자 로그인 확인됨: ${currentUser.uid}');
-
-          // Database 저장 재시도
-          try {
-            final userData = <String, Object>{
-              'email': _emailController.text.trim(),
-              'name': _nameController.text.trim(),
-              'phone': _phoneController.text.trim(),
-              'officialId': _officialIdController.text.trim(),
-              'department': _selectedDepartment,
-              'rank': _selectedRank,
-              'position': _selectedPosition,
-              'certifications': _certifications.toList(),
-              'status': 'pending',
-              'isOnDuty': false,
-              'locationEnabled': false,
-              'notificationEnabled': true,
-              'createdAt': DateTime.now().toIso8601String(),
-            };
-
-            await FirebaseDatabase.instance
-                .ref('users/${currentUser.uid}')
-                .set(userData);
-
-            debugPrint('✅ 백업 저장 성공!');
-
-            if (mounted) {
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder:
-                    (context) => AlertDialog(
-                      title: const Text('회원가입 완료'),
-                      content: const Text(
-                        '회원가입이 완료되었습니다.\n'
-                        '관리자 승인 후 서비스를 이용하실 수 있습니다.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(
-                                builder: (_) => const LoginScreen(),
-                              ),
-                              (route) => false,
-                            );
-                          },
-                          child: const Text('확인'),
-                        ),
-                      ],
-                    ),
-              );
-            }
-            return; // 성공으로 종료
-          } catch (dbError) {
-            debugPrint('❌ 백업 저장도 실패: $dbError');
-          }
-        }
-      }
-
-      _showErrorDialog('회원가입 처리 중 오류가 발생했습니다.\n잠시 후 다시 시도해주세요.');
     }
   }
 
@@ -312,6 +240,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
+
+                if (_errorMessage != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red[200]!),
+                    ),
+                    child: Text(
+                      _errorMessage!,
+                      style: TextStyle(color: Colors.red[700]),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
 
                 _buildSectionTitle('기본 정보'),
 
@@ -390,9 +334,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       return '이름을 입력해주세요';
                     }
                     final trimmedValue = value.trim();
-                    if (!RegExp(r'^[가-힣\s]+$').hasMatch(trimmedValue)) {
-                      return '한글만 입력 가능합니다';
-                    }
                     if (trimmedValue.replaceAll(' ', '').length < 2) {
                       return '이름은 2자 이상이어야 합니다';
                     }
@@ -547,9 +488,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                               // 디버깅용 출력
                               debugPrint('🏆 선택된 자격증: $_certifications');
-                              debugPrint(
-                                '🏆 자격증 타입: ${_certifications.runtimeType}',
-                              );
                             },
                           );
                         }).toList(),

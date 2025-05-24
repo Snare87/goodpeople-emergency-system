@@ -1,4 +1,4 @@
-// lib/screens/home_screen.dart - 탭 필터링 문제 수정
+// lib/screens/home_screen.dart - 성능 및 버그 개선
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -51,11 +51,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // 현재 위치 가져오기
   Future<void> _getCurrentPosition() async {
-    final position = await _locationService.getCurrentPosition();
-    if (position != null && mounted) {
-      setState(() {
-        _currentPosition = position;
-      });
+    try {
+      final position = await _locationService.getCurrentPosition();
+      if (position != null && mounted) {
+        setState(() {
+          _currentPosition = position;
+        });
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] 위치 정보 가져오기 실패: $e');
     }
   }
 
@@ -118,28 +122,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // 거리순 정렬 (수정된 버전)
   void _sortByDistance(List<Call> calls) {
-    for (int i = 0; i < calls.length; i++) {
-      final distance = Geolocator.distanceBetween(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
-        calls[i].lat,
-        calls[i].lng,
-      );
-      calls[i] = calls[i].copyWith(distance: distance); // ✅ 인덱스로 직접 할당
-    }
-    calls.sort((a, b) => a.distance.compareTo(b.distance));
+    try {
+      if (_currentPosition == null) return;
 
-    // 디버그 로그 추가
-    for (var call in calls) {
-      debugPrint(
-        '[HomeScreen] ${call.eventType}: ${call.distance.toStringAsFixed(0)}m',
-      );
+      for (int i = 0; i < calls.length; i++) {
+        final distance = Geolocator.distanceBetween(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+          calls[i].lat,
+          calls[i].lng,
+        );
+        calls[i] = calls[i].copyWith(distance: distance); // ✅ 인덱스로 직접 할당
+      }
+      calls.sort((a, b) => a.distance.compareTo(b.distance));
+
+      // 디버그 로그 추가
+      for (var call in calls) {
+        debugPrint(
+          '[HomeScreen] ${call.eventType}: ${call.distance.toStringAsFixed(0)}m',
+        );
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] 거리 정렬 오류: $e');
     }
   }
 
   // 시간순 정렬
   void _sortByTime(List<Call> calls) {
-    calls.sort((a, b) => b.startAt.compareTo(a.startAt));
+    try {
+      calls.sort((a, b) => b.startAt.compareTo(a.startAt));
+    } catch (e) {
+      debugPrint('[HomeScreen] 시간 정렬 오류: $e');
+    }
   }
 
   // 필터 변경 (수정된 함수)
@@ -162,14 +176,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // 로그아웃 함수를 조건부로 수정
   Future<void> _logout() async {
-    // 탭뷰 모드일 때는 로그아웃 기능을 비활성화 (MainScreen에서 처리)
-    if (widget.isTabView) return;
+    try {
+      // 탭뷰 모드일 때는 로그아웃 기능을 비활성화 (MainScreen에서 처리)
+      if (widget.isTabView) return;
 
-    await FirebaseAuth.instance.signOut();
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
+      await FirebaseAuth.instance.signOut();
+      debugPrint('[HomeScreen] 로그아웃 성공');
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] 로그아웃 오류: $e');
+      // 오류 발생 시 사용자에게 알림
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('로그아웃 중 오류가 발생했습니다: $e')));
+      }
     }
   }
 
@@ -364,16 +390,20 @@ class _CallCardState extends State<CallCard> {
 
   // 활성 임무 확인
   void _checkActiveMission() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      final hasActive = await CallDataService().hasActiveMission(
-        currentUser.uid,
-      );
-      if (mounted) {
-        setState(() {
-          _hasActiveMission = hasActive;
-        });
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        final hasActive = await CallDataService().hasActiveMission(
+          currentUser.uid,
+        );
+        if (mounted) {
+          setState(() {
+            _hasActiveMission = hasActive;
+          });
+        }
       }
+    } catch (e) {
+      debugPrint('[CallCard] 활성 임무 확인 오류: $e');
     }
   }
 
