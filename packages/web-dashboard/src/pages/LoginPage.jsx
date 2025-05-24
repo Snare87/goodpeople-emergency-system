@@ -11,12 +11,10 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  // 이전에 알림이 표시되었는지 추적
-  const alertShownRef = useRef(false);
-  
   const navigate = useNavigate();
   const location = useLocation();
   const { login, isLoggedIn } = useAuth();
+  const errorShownRef = useRef(false);
   
   // 이미 로그인한 경우 대시보드로 리다이렉트
   useEffect(() => {
@@ -25,29 +23,22 @@ export default function LoginPage() {
     }
   }, [isLoggedIn, navigate]);
   
-  // URL 상태에서 오류 메시지 확인 (한 번만 실행)
+  // URL 상태에서 오류 메시지 확인 
   useEffect(() => {
-    // 권한 오류 메시지가 있고 아직 알림이 표시되지 않았으면
-    if (location.state?.authError && !alertShownRef.current) {
-      const errorMessage = location.state.authError;
-      setError(errorMessage);
-      alert(errorMessage);
+    // 권한 오류가 있고 아직 표시하지 않았으면
+    if (location.state?.authError && !errorShownRef.current) {
+      setError(location.state.authError);
+      errorShownRef.current = true;
       
-      // 알림이 표시되었음을 표시
-      alertShownRef.current = true;
-      
-      // state 초기화 - 이 코드는 한 번만 실행
-      window.history.replaceState({}, document.title);
+      // 브라우저 히스토리에서 state 제거 (지연 없이)
+      navigate(location.pathname, { replace: true });
     }
-  }, [location.state]);
+  }, [location, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // 알림 표시 여부 초기화
-    alertShownRef.current = false;
-    
     setError('');
+    errorShownRef.current = false;
     
     if (!username || !password) {
       return setError('아이디와 비밀번호를 모두 입력해주세요.');
@@ -84,13 +75,6 @@ export default function LoginPage() {
       } else if (err.message) {
         // 권한 관련 오류 등 커스텀 에러 메시지 사용
         errorMessage = err.message;
-        
-        // 웹 권한 오류인 경우에만 알림 표시 (중복 방지)
-        if (err.message.includes('웹 대시보드 접근 권한이 없습니다') && !alertShownRef.current) {
-          errorMessage = '웹 대시보드 접근 권한이 없습니다. 관리자에게 문의하세요.';
-          alert(errorMessage);
-          alertShownRef.current = true;
-        }
       } else {
         errorMessage = '로그인 중 오류가 발생했습니다.';
       }
