@@ -1,15 +1,16 @@
-// lib/services/call_data_service.dart - 불필요한 null-aware 연산자 수정
+// lib/services/call_data_service.dart - 5km 반경 제한 적용
 import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:goodpeople_responder/models/call.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:goodpeople_responder/services/location_service.dart';
 
 class CallDataService {
   static final CallDataService _instance = CallDataService._internal();
   factory CallDataService() => _instance;
   CallDataService._internal();
 
-  // _callsRef는 이미 클래스에 정의되어 있음
   final DatabaseReference _callsRef = FirebaseDatabase.instance.ref('calls');
   StreamController<List<Call>>? _callsController;
 
@@ -25,22 +26,29 @@ class CallDataService {
     _callsController?.addError(error);
   }
 
-  // 사용 가능한 재난 스트림 가져오기 (기존 필터링 로직 완전 복원)
+  // 사용 가능한 재난 스트림 가져오기 (5km 필터링 추가)
   Stream<List<Call>> getAvailableCallsStream() {
     _callsController?.close();
     _callsController = StreamController<List<Call>>.broadcast();
 
-    // 서버 우선 정책으로 설정 (기존과 동일)
     try {
       _callsRef.keepSynced(true);
 
-      // Firebase에서 데이터 수신
       _callsRef.onValue.listen(
-        (event) {
+        (event) async {
+          // async 추가
           try {
             final data = event.snapshot.value;
             debugPrint('[CallDataService] Firebase 데이터 변경 감지!');
-            final calls = _processCallData(data);
+
+            // 현재 위치 가져오기 추가
+            final currentPosition =
+                await LocationService().getCurrentPosition();
+
+            final calls = _processCallData(
+              data,
+              currentPosition,
+            ); // currentPosition 추가
             _callsController?.add(calls);
           } catch (error, stackTrace) {
             _handleError(error, stackTrace);
@@ -72,8 +80,9 @@ class CallDataService {
     }
   }
 
-  // 재난 데이터 처리 (기존 로직 완전 복원)
-  List<Call> _processCallData(dynamic data) {
+  // 재난 데이터 처리 (5km 필터링 추가)
+  List<Call> _processCallData(dynamic data, Position? currentPosition) {
+    // currentPosition 추가
     if (data == null) {
       debugPrint('[CallDataService] 수신 데이터가 null입니다.');
       return [];
@@ -103,10 +112,31 @@ class CallDataService {
             if (status == 'dispatched' &&
                 !hasResponder &&
                 status != 'completed') {
-              debugPrint(
-                '[CallDataService] ✅ call $key 최종 필터 통과! 목록에 추가합니다. (${call.eventType} - ${call.address})',
-              );
-              availableCalls.add(call);
+              // 5km 반경 필터링 추가
+              if (currentPosition != null) {
+                final distance = Geolocator.distanceBetween(
+                  currentPosition.latitude,
+                  currentPosition.longitude,
+                  call.lat,
+                  call.lng,
+                );
+
+                // 5km(5000m) 이내인 경우만 추가
+                if (distance <= 5000) {
+                  debugPrint(
+                    '[CallDataService] ✅ call $key 5km 이내! 거리: ${distance.toStringAsFixed(0)}m',
+                  );
+                  availableCalls.add(call.copyWith(distance: distance));
+                } else {
+                  debugPrint(
+                    '[CallDataService] ❌ call $key 5km 초과. 거리: ${distance.toStringAsFixed(0)}m',
+                  );
+                }
+              } else {
+                // 위치 정보가 없으면 모든 재난 표시 (기존 동작)
+                debugPrint('[CallDataService] ⚠️ 위치 정보 없음 - call $key 추가');
+                availableCalls.add(call);
+              }
             } else {
               debugPrint(
                 '[CallDataService] ❌ call $key 최종 필터 미통과. (status: $status, hasResponder: $hasResponder, isCompleted: ${status == 'completed'}) - ${call.eventType} ${call.address}',

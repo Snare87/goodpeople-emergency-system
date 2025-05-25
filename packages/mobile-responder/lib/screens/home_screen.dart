@@ -1,7 +1,6 @@
-// packages/mobile-responder/lib/screens/home_screen.dart - 성능 및 버그 개선
+// packages/mobile-responder/lib/screens/home_screen.dart - 5km 반경 제한 적용
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:goodpeople_responder/screens/call_detail_screen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:goodpeople_responder/services/location_service.dart';
@@ -10,7 +9,7 @@ import 'package:goodpeople_responder/services/call_data_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool isTabView;
-  final Function(VoidCallback)? onRefreshReady; // 새로고침 콜백 전달
+  final Function(VoidCallback)? onRefreshReady;
 
   const HomeScreen({super.key, this.isTabView = false, this.onRefreshReady});
 
@@ -28,8 +27,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String _filterType = "전체";
   Position? _currentPosition;
   StreamSubscription? _callsSubscription;
-  StreamSubscription? _activeMissionSubscription;
-  bool _hasActiveMission = false;
 
   @override
   void initState() {
@@ -47,32 +44,31 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     debugPrint('[HomeScreen] dispose 호출됨');
     _callsSubscription?.cancel();
-    _activeMissionSubscription?.cancel();
     super.dispose();
   }
 
   // 화면 초기화
   Future<void> _initializeScreen() async {
+    await _checkLocationPermission(); // 위치 권한 확인 추가
     await _getCurrentPosition();
     _loadCalls();
-    _subscribeToActiveMissions();
   }
 
-  // 활성 임무 상태 구독 함수 추가
-  void _subscribeToActiveMissions() {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      _activeMissionSubscription = _callDataService
-          .hasActiveMissionStream(currentUser.uid)
-          .listen((hasActive) {
-            if (mounted) {
-              setState(() {
-                _hasActiveMission = hasActive;
-              });
-              debugPrint('[HomeScreen] 활성 임무 상태 변경: $hasActive');
-              _applyCurrentFilter();
-            }
-          });
+  // 위치 권한 체크 및 요청
+  Future<void> _checkLocationPermission() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+
+      if (permission == LocationPermission.denied && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('위치 권한이 필요합니다. 5km 이내 재난만 표시됩니다.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     }
   }
 
@@ -200,14 +196,40 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 탭뷰 모드일 때는 body만 반환
     return _buildBody();
   }
 
-  // 본문 위젯을 별도 메서드로 분리
+  // 본문 위젯
   Widget _buildBody() {
     return Column(
       children: [
+        // 위치 정보 및 반경 표시 추가
+        if (_currentPosition != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.blue[50],
+            child: Row(
+              children: [
+                Icon(Icons.my_location, size: 16, color: Colors.blue[700]),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '현재 위치에서 5km 이내 재난 표시 중',
+                    style: TextStyle(color: Colors.blue[700], fontSize: 13),
+                  ),
+                ),
+                Text(
+                  '${_filteredCalls.length}건',
+                  style: TextStyle(
+                    color: Colors.blue[700],
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // 필터 영역
         Container(
           color: Colors.grey[50],
@@ -225,30 +247,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-
-        // 활성 임무 상태 배너 추가
-        if (_hasActiveMission)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.orange[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange[200]!),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.warning_amber, color: Colors.orange[700], size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '현재 진행 중인 임무가 있습니다. 완료 후 새 임무를 수락할 수 있습니다.',
-                    style: TextStyle(color: Colors.orange[800], fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-          ),
 
         // 재난 목록 영역
         Expanded(child: _buildCallsList()),
@@ -294,7 +292,7 @@ class _HomeScreenState extends State<HomeScreen> {
               call: call,
               currentPosition: _currentPosition,
               onTap: () => _navigateToDetail(call),
-              hasActiveMission: _hasActiveMission,
+              hasActiveMission: false,
             );
           },
         ),
@@ -305,15 +303,48 @@ class _HomeScreenState extends State<HomeScreen> {
   // 빈 상태 위젯
   Widget _buildEmptyState() {
     String message =
-        _filterType == "전체" ? '표시할 재난이 없습니다' : '$_filterType 재난이 없습니다';
+        _filterType == "전체"
+            ? '5km 이내에 표시할 재난이 없습니다'
+            : '5km 이내에 $_filterType 재난이 없습니다';
 
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.search_off, size: 48, color: Colors.grey),
+          const Icon(Icons.location_on, size: 48, color: Colors.grey),
           const SizedBox(height: 16),
           Text(message, style: const TextStyle(color: Colors.grey)),
+          const SizedBox(height: 8),
+          Text(
+            '현재 위치 기준 반경 5km 이내의 재난만 표시됩니다',
+            style: TextStyle(color: Colors.grey[500], fontSize: 14),
+            textAlign: TextAlign.center,
+          ),
+          if (_currentPosition == null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.symmetric(horizontal: 32),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.warning, color: Colors.orange[700], size: 20),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      '위치 정보를 가져올 수 없습니다',
+                      style: TextStyle(color: Colors.orange[700], fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_filterType != "전체") ...[
             const SizedBox(height: 8),
             TextButton(
@@ -349,7 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// CallCard 컴포넌트는 그대로 유지
+// CallCard 컴포넌트는 기존 코드 그대로 유지
 class CallCard extends StatefulWidget {
   final Call call;
   final Position? currentPosition;
@@ -552,38 +583,6 @@ class _CallCardState extends State<CallCard> {
                   ),
                 ],
               ),
-
-              // 활성 임무가 있을 때 안내 메시지
-              if (widget.hasActiveMission) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[50],
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: Colors.orange[200]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 16,
-                        color: Colors.orange[700],
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          '현재 진행중인 임무를 완료한 후 새로운 임무를 수락할 수 있습니다.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.orange[700],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ],
           ),
         ),
