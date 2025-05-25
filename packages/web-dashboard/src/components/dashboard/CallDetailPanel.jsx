@@ -4,7 +4,6 @@ import EmptyState from '../common/EmptyState';
 import CallStatusButtons from './CallStatusButtons';
 import DispatchInfoCard from './DispatchInfoCard';
 import ResponderInfo from './ResponderInfo';
-
 import SituationInfo from './SituationInfo';
 
 const CallDetailPanel = ({ 
@@ -59,11 +58,11 @@ const CallDetailPanel = ({
         </div>
       </div>
       
-      {/* 중앙: 응답자 정보 */}
-      <div className="w-[300px] px-4">
+       {/* 중앙: 응답자 정보 */}
+      <div className="w-[400px] px-4">
         <div className="bg-gray-100 rounded-lg p-4 h-full flex flex-col">
           <h3 className="text-lg font-semibold mb-3">응답자</h3>
-          <div className="flex-1 flex items-center">
+          <div className="flex-1">
             <ResponderInfo responder={call.responder} />
           </div>
         </div>

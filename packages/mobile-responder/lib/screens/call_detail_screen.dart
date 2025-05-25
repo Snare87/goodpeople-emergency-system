@@ -161,11 +161,13 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
 
       String userName = "대원";
       String userPositionName = "대원"; // 변수명 변경 (userPosition과 충돌 방지)
+      String userRank = "소방사"; // rank 변수 추가
 
       if (userSnapshot.exists) {
         final userData = Map<String, dynamic>.from(userSnapshot.value as Map);
         userName = userData['name'] ?? "대원";
         userPositionName = userData['position'] ?? "대원"; // 변수명 변경
+        userRank = userData['rank'] ?? "소방사"; // rank 정보 가져오기
       }
 
       // 3. 일반적인 수락 처리
@@ -179,6 +181,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
               "resp_${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}",
           "name": userName,
           "position": userPositionName, // 변수명 변경
+          "rank": userRank, // rank 추가
           "lat": userPosition?.latitude, // Position 타입의 latitude
           "lng": userPosition?.longitude, // Position 타입의 longitude
           "updatedAt": DateTime.now().millisecondsSinceEpoch,

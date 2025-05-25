@@ -38,12 +38,12 @@ const CallListItem = memo(({
         </p>
         <p className="text-sm text-gray-600">{call.address}</p>
         
-        {/* 상황 정보 미리보기 */}
+         {/* 상황 정보 미리보기 */}
         {call.info && (
-          <div className="mt-2">
-            <Badge variant="danger" size="sm">
+          <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+            <p className="text-xs text-gray-700 font-medium">
               {call.info.length > 30 ? `${call.info.substring(0, 30)}...` : call.info}
-            </Badge>
+            </p>
           </div>
         )}
         
