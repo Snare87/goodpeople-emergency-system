@@ -1,18 +1,15 @@
-// 1. firebase.js 파일 확장 - 인증 기능 추가
-// src/firebase.js에 다음 코드 추가
-
 import { initializeApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
-import { getAuth } from 'firebase/auth'; // 추가
+import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAiFfhuIMUilqYViNrBOr922ks8YO4or20",
-  authDomain: "goodpeople-95f54.firebaseapp.com",
-  databaseURL: "https://goodpeople-95f54-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "goodpeople-95f54",
-  storageBucket: "goodpeople-95f54.firebasestorage.app",
-  messagingSenderId: "24321943098",
-  appId: "1:24321943098:web:18bf9c2cab0cd0cf96f703"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.REACT_APP_FIREBASE_DATABASE_URL,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID
 };
 
 // Firebase 앱 초기화
@@ -21,5 +18,5 @@ const app = initializeApp(firebaseConfig);
 // Realtime Database 인스턴스
 export const db = getDatabase(app);
 
-// Authentication 인스턴스 - 추가
+// Authentication 인스턴스
 export const auth = getAuth(app);
