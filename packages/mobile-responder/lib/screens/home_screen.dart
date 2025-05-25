@@ -11,9 +11,10 @@ import 'package:goodpeople_responder/models/call.dart';
 import 'package:goodpeople_responder/services/call_data_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  final bool isTabView; // 새로 추가된 매개변수
+  final bool isTabView;
+  final Function(VoidCallback)? onRefreshReady; // 새로고침 콜백 전달
 
-  const HomeScreen({super.key, this.isTabView = false});
+  const HomeScreen({super.key, this.isTabView = false, this.onRefreshReady});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -23,27 +24,32 @@ class _HomeScreenState extends State<HomeScreen> {
   final CallDataService _callDataService = CallDataService();
   final LocationService _locationService = LocationService();
 
-  List<Call> _allCalls = []; // 새로 추가
-  List<Call> _filteredCalls = []; // 기존 유지
+  List<Call> _allCalls = [];
+  List<Call> _filteredCalls = [];
   bool _isLoading = true;
   String _filterType = "전체";
   Position? _currentPosition;
   StreamSubscription? _callsSubscription;
-  StreamSubscription? _activeMissionSubscription; // 활성 임무 구독 추가
-  bool _hasActiveMission = false; // 활성 임무 상태 추가
+  StreamSubscription? _activeMissionSubscription;
+  bool _hasActiveMission = false;
 
   @override
   void initState() {
     super.initState();
     debugPrint('[HomeScreen] initState 호출됨');
     _initializeScreen();
+
+    // 새로고침 콜백 전달
+    if (widget.onRefreshReady != null) {
+      widget.onRefreshReady!(_refresh);
+    }
   }
 
   @override
   void dispose() {
     debugPrint('[HomeScreen] dispose 호출됨');
     _callsSubscription?.cancel();
-    _activeMissionSubscription?.cancel(); // 활성 임무 구독 취소
+    _activeMissionSubscription?.cancel();
     super.dispose();
   }
 
@@ -51,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _initializeScreen() async {
     await _getCurrentPosition();
     _loadCalls();
-    _subscribeToActiveMissions(); // 활성 임무 상태 구독
+    _subscribeToActiveMissions();
   }
 
   // 활성 임무 상태 구독 함수 추가
@@ -66,8 +72,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 _hasActiveMission = hasActive;
               });
               debugPrint('[HomeScreen] 활성 임무 상태 변경: $hasActive');
-
-              // 상태가 변경되면 필터 재적용
               _applyCurrentFilter();
             }
           });
@@ -97,10 +101,10 @@ class _HomeScreenState extends State<HomeScreen> {
       (calls) {
         if (mounted) {
           setState(() {
-            _allCalls = calls; // 원본 데이터 저장
+            _allCalls = calls;
             _isLoading = false;
           });
-          _applyCurrentFilter(); // 현재 필터 적용
+          _applyCurrentFilter();
         }
       },
       onError: (error) {
@@ -114,15 +118,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 현재 필터 적용 (수정된 함수)
+  // 현재 필터 적용
   void _applyCurrentFilter() {
     debugPrint(
       '[HomeScreen] _applyCurrentFilter 시작: $_filterType, 원본 데이터 개수: ${_allCalls.length}',
     );
 
-    List<Call> filtered = List.from(_allCalls); // 항상 원본 데이터에서 시작
+    List<Call> filtered = List.from(_allCalls);
 
-    // 이벤트 타입 필터링
     if (_filterType != "전체") {
       filtered =
           filtered.where((call) => call.eventType == _filterType).toList();
@@ -130,7 +133,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     debugPrint('[HomeScreen] 타입 필터링 후: ${filtered.length}개');
 
-    // 위치 기반 정렬 또는 시간순 정렬
     if (_currentPosition != null) {
       _sortByDistance(filtered);
     } else {
@@ -145,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 거리순 정렬 (수정된 버전)
+  // 거리순 정렬
   void _sortByDistance(List<Call> calls) {
     try {
       if (_currentPosition == null) return;
@@ -157,11 +159,10 @@ class _HomeScreenState extends State<HomeScreen> {
           calls[i].lat,
           calls[i].lng,
         );
-        calls[i] = calls[i].copyWith(distance: distance); // ✅ 인덱스로 직접 할당
+        calls[i] = calls[i].copyWith(distance: distance);
       }
       calls.sort((a, b) => a.distance.compareTo(b.distance));
 
-      // 디버그 로그 추가
       for (var call in calls) {
         debugPrint(
           '[HomeScreen] ${call.eventType}: ${call.distance.toStringAsFixed(0)}m',
@@ -181,13 +182,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 필터 변경 (수정된 함수)
+  // 필터 변경
   void _changeFilter(String filterType) {
     debugPrint('[HomeScreen] 필터 변경: $_filterType -> $filterType');
     setState(() {
       _filterType = filterType;
     });
-    _applyCurrentFilter(); // 원본 데이터에서 새로운 필터 적용
+    _applyCurrentFilter();
   }
 
   // 새로고침
@@ -199,91 +200,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadCalls();
   }
 
-  // 로그아웃 함수를 조건부로 수정
-  Future<void> _logout() async {
-    try {
-      // 탭뷰 모드일 때는 로그아웃 기능을 비활성화 (MainScreen에서 처리)
-      if (widget.isTabView) return;
-
-      await FirebaseAuth.instance.signOut();
-      debugPrint('[HomeScreen] 로그아웃 성공');
-
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
-    } catch (e) {
-      debugPrint('[HomeScreen] 로그아웃 오류: $e');
-      // 오류 발생 시 사용자에게 알림
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('로그아웃 중 오류가 발생했습니다: $e')));
-      }
-    }
-  }
-
-  // 알림 상태 가져오기
-  Future<bool> _getNotificationStatus() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return true;
-
-    try {
-      final snapshot =
-          await FirebaseDatabase.instance
-              .ref('users/$userId/notificationEnabled')
-              .get();
-      return snapshot.value as bool? ?? true;
-    } catch (e) {
-      return true;
-    }
-  }
-
-  // 알림 토글
-  Future<void> _toggleNotifications() async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
-
-    try {
-      final currentStatus = await _getNotificationStatus();
-      await FirebaseDatabase.instance.ref('users/$userId').update({
-        'notificationEnabled': !currentStatus,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(!currentStatus ? '알림이 켜졌습니다' : '알림이 꺼졌습니다'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('[MainScreen] 알림 토글 오류: $e');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('재난 대응 시스템'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _isLoading ? null : _refresh,
-            tooltip: '새로고침',
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: '로그아웃',
-          ),
-        ],
-      ),
-      body: _buildBody(),
-    );
+    // 탭뷰 모드일 때는 body만 반환
+    return _buildBody();
   }
 
   // 본문 위젯을 별도 메서드로 분리
@@ -292,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         // 필터 영역
         Container(
-          color: Colors.white,
+          color: Colors.grey[50],
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -338,49 +258,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 필터 섹션 위젯
-  Widget _buildFilterSection() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.all(8.0),
-      child: Column(
-        children: [
-          // 새로고침 버튼을 필터 위에 배치
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton.icon(
-                onPressed: _isLoading ? null : _refresh,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('새로고침'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.grey[700],
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          // 필터 칩들
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildFilterChip("전체"),
-                _buildFilterChip("화재"),
-                _buildFilterChip("구급"),
-                _buildFilterChip("구조"),
-                _buildFilterChip("기타"),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // 필터 칩 위젯
   Widget _buildFilterChip(String label) {
     final isSelected = _filterType == label;
@@ -389,8 +266,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ChoiceChip(
         label: Text(label),
         selected: isSelected,
-        backgroundColor: Colors.grey[200],
+        backgroundColor: Colors.transparent,
         selectedColor: Colors.red[100],
+        side: BorderSide(color: isSelected ? Colors.red : Colors.grey[400]!),
         onSelected: (selected) => _changeFilter(label),
       ),
     );
@@ -408,22 +286,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return RefreshIndicator(
       onRefresh: _refresh,
-      child: ListView.builder(
-        itemCount: _filteredCalls.length,
-        itemBuilder: (context, index) {
-          final call = _filteredCalls[index];
-          return CallCard(
-            call: call,
-            currentPosition: _currentPosition,
-            onTap: () => _navigateToDetail(call),
-            hasActiveMission: _hasActiveMission, // 활성 임무 상태 전달
-          );
-        },
+      child: Container(
+        color: Colors.grey[50],
+        child: ListView.builder(
+          itemCount: _filteredCalls.length,
+          itemBuilder: (context, index) {
+            final call = _filteredCalls[index];
+            return CallCard(
+              call: call,
+              currentPosition: _currentPosition,
+              onTap: () => _navigateToDetail(call),
+              hasActiveMission: _hasActiveMission,
+            );
+          },
+        ),
       ),
     );
   }
 
-  // 빈 상태 위젯 (필터별 메시지 개선)
+  // 빈 상태 위젯
   Widget _buildEmptyState() {
     String message =
         _filterType == "전체" ? '표시할 재난이 없습니다' : '$_filterType 재난이 없습니다';
@@ -470,19 +351,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// CallCard 컴포넌트 - info 표시 추가
+// CallCard 컴포넌트는 그대로 유지
 class CallCard extends StatefulWidget {
   final Call call;
   final Position? currentPosition;
   final VoidCallback onTap;
-  final bool hasActiveMission; // 활성 임무 상태 추가
+  final bool hasActiveMission;
 
   const CallCard({
     super.key,
     required this.call,
     this.currentPosition,
     required this.onTap,
-    this.hasActiveMission = false, // 기본값 false
+    this.hasActiveMission = false,
   });
 
   @override
@@ -515,7 +396,6 @@ class _CallCardState extends State<CallCard> {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      // 활성 임무가 있으면 비활성화 표시
       color: widget.hasActiveMission ? Colors.grey[100] : null,
       child: InkWell(
         onTap: widget.onTap,
@@ -713,13 +593,11 @@ class _CallCardState extends State<CallCard> {
     );
   }
 
-  // 시간 포맷팅
   String _formatTime(int timestamp) {
     final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
     return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
-  // 경과시간 계산
   String _getElapsedTime(int startAt) {
     final now = _currentTime.millisecondsSinceEpoch;
     final diff = now - startAt;

@@ -18,17 +18,24 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   int _activeMissionCount = 0;
 
+  // 새로고침을 위한 키 (HomeScreen을 다시 빌드하기 위함)
+  Key _homeScreenKey = UniqueKey();
+
   late List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+    _buildPages();
+    _listenToActiveMissions();
+  }
+
+  void _buildPages() {
     _pages = [
-      const HomeScreen(isTabView: true), // 탭뷰 모드로 설정
+      HomeScreen(key: _homeScreenKey, isTabView: true), // 탭뷰 모드로 설정
       const MyMissionsScreen(),
       const ProfileInfoScreen(),
     ];
-    _listenToActiveMissions();
   }
 
   // 진행중인 임무 개수 감지
@@ -95,6 +102,15 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  // 새로고침 함수
+  void _refreshHomeScreen() {
+    setState(() {
+      // 키를 변경하여 HomeScreen을 다시 빌드
+      _homeScreenKey = UniqueKey();
+      _buildPages();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -103,23 +119,26 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: Colors.red,
         foregroundColor: Colors.white,
         actions: [
-          // 알림 토글
+          // 알림 토글 - Switch로 변경
           FutureBuilder<bool>(
             future: _getNotificationStatus(),
             builder: (context, snapshot) {
               final isEnabled = snapshot.data ?? true;
-              return IconButton(
-                icon: Icon(
-                  isEnabled
-                      ? Icons.notifications_active
-                      : Icons.notifications_off,
-                  color: isEnabled ? Colors.white : Colors.grey[300],
-                ),
-                onPressed: _toggleNotifications,
-                tooltip: isEnabled ? '알림 켜짐' : '알림 꺼짐',
+              return Switch(
+                value: isEnabled,
+                onChanged: (_) => _toggleNotifications(),
+                activeColor: Colors.white,
+                activeTrackColor: Colors.white24,
               );
             },
           ),
+          // 새로고침 버튼 추가 (재난 목록 탭일 때만 표시)
+          if (_currentIndex == 0)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _refreshHomeScreen,
+              tooltip: '새로고침',
+            ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _logout,
