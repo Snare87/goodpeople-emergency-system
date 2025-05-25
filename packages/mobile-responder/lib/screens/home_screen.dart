@@ -2,9 +2,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:goodpeople_responder/screens/call_detail_screen.dart';
-import 'package:goodpeople_responder/screens/login_screen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:goodpeople_responder/services/location_service.dart';
 import 'package:goodpeople_responder/models/call.dart';

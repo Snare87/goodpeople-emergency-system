@@ -143,16 +143,24 @@ class NotificationService {
     // 사용자의 알림 설정 확인
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
+      debugPrint('🔔 [NotificationService] 알림 수신 - 사용자 설정 확인 중...');
+
       final snapshot =
           await FirebaseDatabase.instance
               .ref('users/${user.uid}/notificationEnabled')
               .get();
       final isEnabled = snapshot.value as bool? ?? true;
 
+      debugPrint(
+        '🔔 [NotificationService] 알림 설정 상태: ${isEnabled ? "켜짐" : "꺼짐"}',
+      );
+
       if (!isEnabled) {
-        debugPrint('사용자가 알림을 비활성화함');
+        debugPrint('❌ [NotificationService] 사용자가 알림을 비활성화함 - 알림 표시 안 함');
         return;
       }
+
+      debugPrint('✅ [NotificationService] 알림 표시 진행');
     }
 
     if (message.notification != null) {

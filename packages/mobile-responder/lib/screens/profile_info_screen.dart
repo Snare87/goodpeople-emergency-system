@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 
 class ProfileInfoScreen extends StatefulWidget {
   const ProfileInfoScreen({super.key});
@@ -15,6 +16,9 @@ class ProfileInfoScreen extends StatefulWidget {
 class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
+
+  // StreamSubscription 변수를 여기에 선언
+  StreamSubscription? _notificationSubscription;
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -52,6 +56,50 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
   void initState() {
     super.initState();
     _loadUserProfile();
+    _listenToNotificationChanges(); // 알림 상태 실시간 감지
+    _checkInitialLocationStatus(); // 위치 상태 확인
+  }
+
+  // 초기 위치 상태 확인 함수
+  Future<void> _checkInitialLocationStatus() async {
+    // 위치 서비스 활성화 여부 확인
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    debugPrint('\n📍 [위치 서비스] 시스템 위치 서비스: ${serviceEnabled ? "활성화" : "비활성화"}');
+
+    // 앱 위치 권한 확인
+    final permission = await Geolocator.checkPermission();
+    debugPrint('📍 [위치 권한] 앱 권한 상태: $permission');
+
+    // Firebase 설정값 확인
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      final snapshot =
+          await FirebaseDatabase.instance
+              .ref('users/$userId/locationEnabled')
+              .get();
+      final fbValue = snapshot.value as bool? ?? true;
+      debugPrint('📍 [Firebase] 위치 설정: ${fbValue ? "켜짐" : "꺼짐"}');
+    }
+  }
+
+  // 알림 설정 실시간 감지 함수
+  void _listenToNotificationChanges() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    // Firebase 실시간 리스너 설정
+    _notificationSubscription = FirebaseDatabase.instance
+        .ref('users/$userId/notificationEnabled')
+        .onValue
+        .listen((event) {
+          if (mounted) {
+            final newValue = event.snapshot.value as bool? ?? true;
+            setState(() {
+              _notificationEnabled = newValue;
+            });
+            debugPrint('📱 [내 정보] 알림 설정 변경 감지: ${newValue ? "켜짐" : "꺼짐"}');
+          }
+        });
   }
 
   Future<void> _loadUserProfile() async {
@@ -124,6 +172,27 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
         'updatedAt': DateTime.now().toIso8601String(),
       });
 
+      // 저장 후 확인
+      debugPrint('\n📱 [내 정보 저장] 설정 상태:');
+      debugPrint('  - 알림 수신: ${_notificationEnabled ? "켜짐 🔔" : "꺼짐 🔕"}');
+      debugPrint('  - 위치 정보: ${_locationEnabled ? "켜짐 📍" : "꺼짐 📍"}');
+      debugPrint(
+        '  - 백그라운드 알림: ${_backgroundNotificationEnabled ? "켜짐 🔔" : "꺼짐 🔕"}',
+      );
+
+      // Firebase에서 다시 확인
+      final verifySnapshot =
+          await FirebaseDatabase.instance.ref('users/$userId').get();
+      if (verifySnapshot.exists) {
+        final data = verifySnapshot.value as Map;
+        debugPrint('\n🔍 [Firebase 확인] 저장된 값:');
+        debugPrint('  - 알림: ${data['notificationEnabled'] ?? "null"}');
+        debugPrint('  - 위치: ${data['locationEnabled'] ?? "null"}');
+        debugPrint(
+          '  - 백그라운드: ${data['backgroundNotificationEnabled'] ?? "null"}',
+        );
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -145,11 +214,18 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
   }
 
   Future<void> _checkLocationPermission() async {
+    debugPrint('📍 [위치 권한] 확인 시작');
+
     if (_locationEnabled) {
       LocationPermission permission = await Geolocator.checkPermission();
+      debugPrint('📍 [위치 권한] 현재 상태: $permission');
+
       if (permission == LocationPermission.denied) {
+        debugPrint('📍 [위치 권한] 거부됨 - 권한 요청 중...');
         permission = await Geolocator.requestPermission();
+
         if (permission == LocationPermission.denied) {
+          debugPrint('❌ [위치 권한] 사용자가 권한을 거부함');
           setState(() {
             _locationEnabled = false;
           });
@@ -158,8 +234,27 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
               context,
             ).showSnackBar(const SnackBar(content: Text('위치 권한이 거부되었습니다')));
           }
+        } else if (permission == LocationPermission.deniedForever) {
+          debugPrint('❌ [위치 권한] 영구적으로 거부됨 - 설정에서 직접 변경 필요');
+          setState(() {
+            _locationEnabled = false;
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('위치 권한이 거부되었습니다. 설정에서 직접 권한을 허용해주세요.'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        } else {
+          debugPrint('✅ [위치 권한] 허용됨: $permission');
         }
+      } else {
+        debugPrint('✅ [위치 권한] 이미 허용된 상태: $permission');
       }
+    } else {
+      debugPrint('📍 [위치 권한] 위치 기능이 꺼져있음');
     }
   }
 
@@ -335,12 +430,28 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                               Icons.location_on,
                               _locationEnabled,
                               (value) async {
+                                debugPrint(
+                                  '\n========== 위치 정보 설정 변경 시작 ==========',
+                                );
+                                debugPrint(
+                                  '📍 현재 위치 설정: ${_locationEnabled ? "켜짐" : "꺼짐"}',
+                                );
+                                debugPrint('📍 변경할 설정: ${value ? "켜짐" : "꺼짐"}');
+
                                 setState(() {
                                   _locationEnabled = value;
                                 });
+
                                 if (value) {
+                                  debugPrint('📍 위치 권한 확인 중...');
                                   await _checkLocationPermission();
+                                } else {
+                                  debugPrint('📍 사용자가 위치 정보 제공을 꺼짐');
                                 }
+
+                                debugPrint(
+                                  '========== 위치 정보 설정 변경 완료 ==========\n',
+                                );
                               },
                             ),
                             const Divider(),
@@ -512,6 +623,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
   @override
   void dispose() {
     _phoneController.dispose();
+    _notificationSubscription?.cancel();
     super.dispose();
   }
 }

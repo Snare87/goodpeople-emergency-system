@@ -80,25 +80,70 @@ class _MainScreenState extends State<MainScreen> {
 
   // 알림 토글
   Future<void> _toggleNotifications() async {
+    debugPrint('\n========== 알림 설정 변경 시작 ==========');
+
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
+    if (userId == null) {
+      debugPrint('❌ 오류: 사용자 정보 없음');
+      return;
+    }
 
     try {
+      // 현재 상태 가져오기
       final currentStatus = await _getNotificationStatus();
+      debugPrint('🔵 지금 알림은: ${currentStatus ? "켜져 있음 🔔" : "꺼져 있음 🔕"}');
+
+      // 새로운 상태
+      final newStatus = !currentStatus;
+      debugPrint('🟡 변경 후에는: ${newStatus ? "켜질 예정 🔔" : "꺼질 예정 🔕"}');
+
+      // Firebase에 업데이트
       await FirebaseDatabase.instance.ref('users/$userId').update({
-        'notificationEnabled': !currentStatus,
+        'notificationEnabled': newStatus,
       });
+
+      // Firebase에서 다시 읽어와서 확인
+      final verifySnapshot =
+          await FirebaseDatabase.instance
+              .ref('users/$userId/notificationEnabled')
+              .get();
+      final verifiedStatus = verifySnapshot.value as bool? ?? true;
+      debugPrint('🟢 최종 확인: 알림이 ${verifiedStatus ? "켜졌습니다 🔔" : "꺼졌습니다 🔕"}');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(!currentStatus ? '알림이 켜졌습니다' : '알림이 꺼졌습니다'),
+            content: Row(
+              children: [
+                Icon(
+                  newStatus
+                      ? Icons.notifications_active
+                      : Icons.notifications_off,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Text(newStatus ? '알림이 켜졌습니다' : '알림이 꺼졌습니다'),
+              ],
+            ),
             duration: const Duration(seconds: 2),
+            backgroundColor: newStatus ? Colors.green : Colors.orange,
           ),
         );
       }
+
+      debugPrint('========== 알림 설정 변경 완료 ==========\n');
     } catch (e) {
-      debugPrint('[MainScreen] 알림 토글 오류: $e');
+      debugPrint('❌ 오류 발생: $e');
+      debugPrint('========== 알림 설정 변경 실패 ==========\n');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('알림 설정 변경 중 오류가 발생했습니다'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -120,15 +165,45 @@ class _MainScreenState extends State<MainScreen> {
         foregroundColor: Colors.white,
         actions: [
           // 알림 토글 - Switch로 변경
-          FutureBuilder<bool>(
-            future: _getNotificationStatus(),
-            builder: (context, snapshot) {
-              final isEnabled = snapshot.data ?? true;
-              return Switch(
-                value: isEnabled,
-                onChanged: (_) => _toggleNotifications(),
-                activeColor: Colors.white,
-                activeTrackColor: Colors.white24,
+          // 알림 토글 - StatefulBuilder로 래핑하여 애니메이션 활성화
+          StatefulBuilder(
+            builder: (context, setState) {
+              return FutureBuilder<bool>(
+                future: _getNotificationStatus(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      width: 50,
+                      height: 30,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    );
+                  }
+
+                  final isEnabled = snapshot.data ?? true;
+                  return Switch(
+                    value: isEnabled,
+                    onChanged: (_) async {
+                      // 토글 전 현재 상태 출력
+                      debugPrint(
+                        '🔔 [알림 토글] 현재 상태: ${isEnabled ? "켜짐" : "꺼짐"}',
+                      );
+
+                      await _toggleNotifications();
+
+                      // UI 업데이트를 위해 setState 호출
+                      setState(() {});
+                    },
+                    activeColor: Colors.white,
+                    activeTrackColor: Colors.white54,
+                    inactiveThumbColor: Colors.grey[300],
+                    inactiveTrackColor: Colors.grey[600],
+                  );
+                },
               );
             },
           ),
