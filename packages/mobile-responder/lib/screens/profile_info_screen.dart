@@ -60,7 +60,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     _checkInitialLocationStatus(); // 위치 상태 확인
   }
 
-  // 초기 위치 상태 확인 함수
+  // 초기 위치 상태 확인 함수 - 수정됨
   Future<void> _checkInitialLocationStatus() async {
     // 위치 서비스 활성화 여부 확인
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -79,6 +79,27 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
               .get();
       final fbValue = snapshot.value as bool? ?? true;
       debugPrint('📍 [Firebase] 위치 설정: ${fbValue ? "켜짐" : "꺼짐"}');
+
+      // 실제 권한 상태와 Firebase 설정 동기화
+      final hasLocationPermission =
+          permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always;
+
+      debugPrint('📍 [동기화] 실제 권한: $hasLocationPermission, Firebase: $fbValue');
+
+      // 불일치하면 Firebase 업데이트
+      if (fbValue != hasLocationPermission) {
+        debugPrint('📍 [동기화] 권한 상태 불일치 - Firebase 업데이트 중...');
+        setState(() {
+          _locationEnabled = hasLocationPermission;
+        });
+
+        // Firebase 업데이트
+        await FirebaseDatabase.instance.ref('users/$userId').update({
+          'locationEnabled': hasLocationPermission,
+        });
+        debugPrint('📍 [동기화] Firebase 업데이트 완료: $hasLocationPermission');
+      }
     }
   }
 

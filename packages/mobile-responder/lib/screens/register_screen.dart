@@ -132,7 +132,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 : List<String>.from(_certifications),
         'status': 'pending',
         'isOnDuty': false,
-        'locationEnabled': false,
+        'locationEnabled': true,
         'notificationEnabled': true,
         'createdAt': DateTime.now().toIso8601String(),
         'statistics': {
