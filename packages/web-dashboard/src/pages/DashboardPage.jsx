@@ -26,7 +26,7 @@ export default function DashboardPage() {
     <div className="h-screen flex flex-col bg-gray-50">
       <Header title="대시보드" />
 
-      <main className="flex-1 p-4 overflow-hidden">
+      <main className="flex-1 p-4 overflow-hidden" style={{ zoom: 0.9 }}>
         <DashboardLayout
           // 데이터
           activeCalls={activeCalls}

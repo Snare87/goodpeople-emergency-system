@@ -38,7 +38,7 @@ const CallDetailPanel = ({
   return (
     <div className="h-full p-4 flex">
       {/* 좌측: 기본 정보 */}
-      <div className="w-[280px] pr-4 flex flex-col">
+      <div className="w-[300px] pr-4 flex flex-col">
         <h3 className="text-lg font-semibold mb-4">
           {call.eventType} 상황
         </h3>
@@ -59,7 +59,7 @@ const CallDetailPanel = ({
       </div>
       
       {/* 중앙: 응답자 정보 */}
-      <div className="w-[200px] px-4">
+      <div className="w-[300px] px-4">
         <div className="bg-gray-100 rounded-lg p-4 h-full flex flex-col">
           <h3 className="text-lg font-semibold mb-3">응답자</h3>
           <div className="flex-1 flex items-center">
