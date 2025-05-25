@@ -330,8 +330,8 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
                     ),
                   ),
 
-                  Expanded(
-                    flex: 2,
+                  SizedBox(
+                    height: 350,
                     child: GoogleMap(
                       initialCameraPosition: CameraPosition(
                         target: LatLng(missionData!.lat, missionData!.lng),
@@ -369,7 +369,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
                   ),
 
                   Expanded(
-                    flex: 1,
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(16),
                       child: Column(
