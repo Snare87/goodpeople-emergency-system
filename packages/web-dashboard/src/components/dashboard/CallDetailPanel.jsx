@@ -36,17 +36,18 @@ const CallDetailPanel = ({
   }
 
   return (
-    <div className="grid grid-cols-12 gap-4 h-full">
-      {/* 좌측: 기본 지령서 정보 (3/12) */}
-      <div className="col-span-3 flex flex-col">
-        <h3 className="text-lg font-semibold mb-2">
+    <div className="h-full p-4 flex">
+      {/* 좌측: 기본 정보 */}
+      <div className="w-[280px] pr-4 flex flex-col">
+        <h3 className="text-lg font-semibold mb-4">
           {call.eventType} 상황
         </h3>
         
-        <DispatchInfoCard call={call} currentTime={currentTime} />
+        <div className="flex-1">
+          <DispatchInfoCard call={call} currentTime={currentTime} />
+        </div>
         
-        {/* 상태에 따른 버튼 */}
-        <div className="mt-auto flex justify-center gap-2">
+        <div className="mt-4">
           <CallStatusButtons
             call={call}
             onDispatch={onDispatch}
@@ -57,16 +58,18 @@ const CallDetailPanel = ({
         </div>
       </div>
       
-      {/* 중앙: 응답자 정보 (3/12) */}
-      <div className="col-span-3 bg-gray-100 rounded-lg p-4 flex flex-col">
-        <h3 className="text-lg font-semibold mb-3">응답자</h3>
-        <div className="flex-1 flex items-center justify-center">
-          <ResponderInfo responder={call.responder} />
+      {/* 중앙: 응답자 정보 */}
+      <div className="w-[200px] px-4">
+        <div className="bg-gray-100 rounded-lg p-4 h-full flex flex-col">
+          <h3 className="text-lg font-semibold mb-3">응답자</h3>
+          <div className="flex-1 flex items-center">
+            <ResponderInfo responder={call.responder} />
+          </div>
         </div>
       </div>
       
-      {/* 우측: 상황 정보 (6/12) */}
-      <div className="col-span-6">
+      {/* 우측: 상황 정보 */}
+      <div className="flex-1 pl-4">
         <SituationInfo info={call.info} />
       </div>
     </div>

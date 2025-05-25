@@ -1,11 +1,12 @@
-// lib/screens/active_mission_screen.dart - 코드 경고 수정
+// lib/screens/active_mission_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:goodpeople_responder/models/call.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:goodpeople_responder/services/location_service.dart';
-import 'package:goodpeople_responder/services/call_data_service.dart'; // CallDataService 추가
+import 'package:goodpeople_responder/services/call_data_service.dart';
 import 'dart:async';
 
 class ActiveMissionScreen extends StatefulWidget {
@@ -23,32 +24,28 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
   Position? userPosition;
   GoogleMapController? mapController;
   StreamSubscription? _callSubscription;
-  final CallDataService _callDataService = CallDataService(); // 서비스 인스턴스 추가
+  final CallDataService _callDataService = CallDataService();
 
   @override
   void initState() {
     super.initState();
     _loadMissionData();
     _getCurrentPosition();
-    _startTracking(); // 위치 추적 시작
+    _startTracking();
   }
 
   @override
   void dispose() {
-    // 화면이 닫힐 때 위치 추적 중지
     LocationService().stopTracking();
-    _callSubscription?.cancel(); // 기존 구독 취소 코드가 있는 경우
-    mapController = null; // 지도 컨트롤러 해제 코드가 있는 경우
+    _callSubscription?.cancel();
+    mapController = null;
     super.dispose();
   }
 
-  // 위치 추적 시작
   void _startTracking() {
-    // 스트림 기반 위치 업데이트 (더 효율적, 더 정확한 실시간 추적)
     LocationService().startLocationStream(widget.callId, 'responder_id');
   }
 
-  // 임무 데이터 불러오기
   void _loadMissionData() {
     _callSubscription = db
         .ref("calls/${widget.callId}")
@@ -70,7 +67,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
         );
   }
 
-  // 현재 위치 가져오기
   Future<void> _getCurrentPosition() async {
     try {
       LocationPermission permission = await Geolocator.checkPermission();
@@ -83,23 +79,19 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
         userPosition = position;
       });
 
-      // 지도 중심 업데이트
       _updateMapCamera();
     } catch (e) {
       debugPrint('위치 정보를 가져오는데 실패했습니다: $e');
     }
   }
 
-  // 카메라 업데이트
   void _updateMapCamera() {
     if (mapController == null || missionData == null) return;
 
-    // 두 지점 사이의 중간 지점 계산
     if (userPosition != null) {
       final midLat = (userPosition!.latitude + missionData!.lat) / 2;
       final midLng = (userPosition!.longitude + missionData!.lng) / 2;
 
-      // 두 점 사이의 거리 계산
       final distance = Geolocator.distanceBetween(
         userPosition!.latitude,
         userPosition!.longitude,
@@ -107,7 +99,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
         missionData!.lng,
       );
 
-      // 거리에 따른 줌 레벨 조정
       double zoomLevel = 15.0;
       if (distance > 10000) {
         zoomLevel = 10.0;
@@ -123,7 +114,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
         ),
       );
     } else {
-      // 사용자 위치가 없으면 목적지만 표시
       mapController!.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
@@ -135,9 +125,7 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
     }
   }
 
-  // 임무 완료 처리 - 수정됨
   Future<void> _completeMission() async {
-    // 확인 다이얼로그 표시
     final confirm = await showDialog<bool>(
       context: context,
       builder:
@@ -160,8 +148,7 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
 
     if (confirm != true) return;
 
-    // 로딩 표시
-    if (!mounted) return; // mounted 체크 추가
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -178,19 +165,16 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
           ),
     );
 
-    // 위치 추적 중지
     LocationService().stopTracking();
 
     try {
-      // CallDataService를 통해 완료 처리
       final success = await _callDataService.completeCall(widget.callId);
 
-      // 로딩 다이얼로그 닫기
-      if (!mounted) return; // mounted 체크 추가
+      if (!mounted) return;
       Navigator.pop(context);
 
       if (success) {
-        if (!mounted) return; // mounted 체크 추가
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("임무가 완료되었습니다!"),
@@ -198,13 +182,12 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
           ),
         );
 
-        // 잠시 후 화면 닫기 (성공 메시지 보여줌)
         Future.delayed(const Duration(seconds: 1), () {
-          if (!mounted) return; // mounted 체크 추가
+          if (!mounted) return;
           Navigator.pop(context);
         });
       } else {
-        if (!mounted) return; // mounted 체크 추가
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("임무 완료 처리 중 오류가 발생했습니다."),
@@ -213,11 +196,97 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
         );
       }
     } catch (e) {
-      // 로딩 다이얼로그 닫기
-      if (!mounted) return; // mounted 체크 추가
+      if (!mounted) return;
       Navigator.pop(context);
 
-      if (!mounted) return; // mounted 체크 추가
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("오류가 발생했습니다: $e")));
+    }
+  }
+
+  Future<void> _cancelAcceptance() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('수락 취소'),
+            content: const Text('정말 이 임무를 취소하시겠습니까?\n다른 대원이 수락할 수 있게 됩니다.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('아니오'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                child: const Text('취소하기'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirm != true) return;
+
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("사용자 정보를 찾을 수 없습니다.")));
+      return;
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text("수락 취소 처리 중..."),
+              ],
+            ),
+          ),
+    );
+
+    LocationService().stopTracking();
+
+    try {
+      final success = await _callDataService.cancelAcceptance(
+        widget.callId,
+        currentUserId,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      if (success) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("임무가 취소되었습니다."),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        Navigator.pop(context);
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("취소 처리 중 오류가 발생했습니다."),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text("오류가 발생했습니다: $e")));
@@ -236,7 +305,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
               ? const Center(child: CircularProgressIndicator())
               : Column(
                 children: [
-                  // 상태 표시 바
                   Container(
                     color: _getMissionStatusColor(missionData!.status),
                     padding: const EdgeInsets.symmetric(
@@ -262,7 +330,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
                     ),
                   ),
 
-                  // 지도 표시
                   Expanded(
                     flex: 2,
                     child: GoogleMap(
@@ -271,7 +338,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
                         zoom: 15,
                       ),
                       markers: {
-                        // 목적지 마커
                         Marker(
                           markerId: const MarkerId('destination'),
                           position: LatLng(missionData!.lat, missionData!.lng),
@@ -280,7 +346,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
                             BitmapDescriptor.hueRed,
                           ),
                         ),
-                        // 사용자 위치 마커
                         if (userPosition != null)
                           Marker(
                             markerId: const MarkerId('user'),
@@ -303,7 +368,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
                     ),
                   ),
 
-                  // 임무 정보
                   Expanded(
                     flex: 1,
                     child: SingleChildScrollView(
@@ -328,7 +392,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // 상세 정보 표시 (있을 경우)
                           if (missionData!.info != null &&
                               missionData!.info!.isNotEmpty) ...[
                             Container(
@@ -359,7 +422,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
                             const SizedBox(height: 16),
                           ],
 
-                          // 경과 시간
                           if (missionData!.acceptedAt != null)
                             Row(
                               children: [
@@ -373,6 +435,27 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
                             ),
 
                           const SizedBox(height: 24),
+
+                          // 수락 취소 버튼
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: _cancelAcceptance,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.orange,
+                                side: const BorderSide(color: Colors.orange),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                              ),
+                              child: const Text(
+                                '수락 취소',
+                                style: TextStyle(fontSize: 18),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
 
                           // 임무 완료 버튼
                           SizedBox(
@@ -400,7 +483,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
     );
   }
 
-  // 상태에 따른 색상
   Color _getMissionStatusColor(String status) {
     switch (status) {
       case 'accepted':
@@ -414,7 +496,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
     }
   }
 
-  // 상태에 따른 아이콘
   IconData _getMissionStatusIcon(String status) {
     switch (status) {
       case 'accepted':
@@ -428,7 +509,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
     }
   }
 
-  // 상태에 따른 텍스트
   String _getMissionStatusText(String status) {
     switch (status) {
       case 'accepted':
@@ -442,7 +522,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
     }
   }
 
-  // 경과 시간 계산
   String _getElapsedTime(int timestamp) {
     final diff = DateTime.now().millisecondsSinceEpoch - timestamp;
     final seconds = diff ~/ 1000;

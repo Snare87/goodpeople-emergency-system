@@ -33,17 +33,18 @@ const DashboardLayout = ({
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {/* 왼쪽: 재난 목록 */}
-      <aside className="md:col-span-1">
-        <Card className="h-[calc(100vh-200px)]">
+    <div className="h-[calc(100vh-88px)] flex gap-4">
+      {/* 왼쪽: 재난 목록 (고정 너비) */}
+      <div className="w-[500px] h-full">
+        <div className="bg-white rounded-lg shadow h-full flex flex-col">
           <TabNav 
             tabs={listTabs}
             activeTab={listTab}
             onChange={setListTab}
           />
           
-          <div className="p-4 overflow-y-auto h-[calc(100%-48px)]">
+          {/* 스크롤 가능한 목록 영역 */}
+          <div className="flex-1 overflow-y-auto p-4">
             {listTab === 'active' ? (
               <CallsList
                 calls={activeCalls}
@@ -62,26 +63,30 @@ const DashboardLayout = ({
               />
             )}
           </div>
-        </Card>
-      </aside>
+        </div>
+      </div>
 
-      {/* 오른쪽: 지령서와 지도 */}
-      <div className="md:col-span-2 grid grid-rows-2 gap-6" style={{ height: 'calc(100vh - 150px)' }}>
+      {/* 오른쪽: 지령서와 지도 (나머지 너비) */}
+      <div className="flex-1 h-full flex flex-col gap-4">
         {/* 지령서 패널 */}
-        <Card>
-          <CallDetailPanel
-            call={selectedCall}
-            onDispatch={dispatchCall}
-            onComplete={completeCall}
-            onReactivate={reactivateCall}
-            onCancel={cancelCall}
-          />
-        </Card>
+        <div className="h-[45%]">
+          <Card className="h-full">
+            <CallDetailPanel
+              call={selectedCall}
+              onDispatch={dispatchCall}
+              onComplete={completeCall}
+              onReactivate={reactivateCall}
+              onCancel={cancelCall}
+            />
+          </Card>
+        </div>
 
         {/* 지도 */}
-        <Card title="지도">
-          <KakaoMap calls={activeCalls} center={mapCenter} />
-        </Card>
+        <div className="h-[55%]">
+          <div className="bg-white rounded-lg shadow h-full relative overflow-hidden">
+            <KakaoMap calls={activeCalls} center={mapCenter} />
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -283,6 +283,37 @@ class CallDataService {
     }
   }
 
+  // 수락 취소 (새로 추가)
+  Future<bool> cancelAcceptance(String callId, String currentUserId) async {
+    try {
+      // 먼저 현재 call 상태 확인
+      final snapshot = await _callsRef.child(callId).get();
+      if (!snapshot.exists) return false;
+
+      final callData = Map<String, dynamic>.from(snapshot.value as Map);
+      final call = Call.fromMap(callId, callData);
+
+      // 자신이 수락한 임무인지 확인
+      if (call.responder != null &&
+          call.responder!.id.contains(currentUserId)) {
+        await _callsRef.child(callId).update({
+          'status': 'dispatched',
+          'acceptedAt': null,
+          'responder': null,
+        });
+
+        debugPrint('[CallDataService] 수락 취소 성공: $callId');
+        return true;
+      } else {
+        debugPrint('[CallDataService] 권한 없음: 다른 대원의 임무입니다');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('[CallDataService] cancelAcceptance 오류: $e');
+      return false;
+    }
+  }
+
   // 응답자 위치 업데이트 (기존 로직 유지)
   Future<bool> updateResponderLocation(
     String callId,

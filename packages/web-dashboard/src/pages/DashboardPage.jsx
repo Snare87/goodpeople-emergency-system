@@ -23,10 +23,10 @@ export default function DashboardPage() {
   } = useDashboard();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-50">
       <Header title="대시보드" />
 
-      <main className="p-6">
+      <main className="flex-1 p-4 overflow-hidden">
         <DashboardLayout
           // 데이터
           activeCalls={activeCalls}

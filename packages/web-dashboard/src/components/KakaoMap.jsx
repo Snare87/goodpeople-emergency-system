@@ -15,7 +15,7 @@ export default function KakaoMap({ calls, center }) {
     // 맵을 새로 생성
     const map = new maps.Map(container, {
       center: new maps.LatLng(center[0], center[1]),
-      level: 3,
+      level: 7,
     });
 
     // 콜마다 마커 추가
@@ -25,7 +25,7 @@ export default function KakaoMap({ calls, center }) {
         position: new maps.LatLng(call.lat, call.lng),
       });
       const info = new maps.InfoWindow({
-        content: `<div style="padding:8px;">${call.customerName}<br/>${call.address}</div>`
+        content: `<div style="padding:8px;">${call.eventType}<br/>${call.address}</div>`
       });
       maps.event.addListener(marker, 'click', () => {
         info.open(map, marker);
@@ -39,7 +39,13 @@ export default function KakaoMap({ calls, center }) {
   return (
     <div
       ref={mapRef}
-      style={{ width: '100%', height: '320px', borderRadius: '0.5rem' }}
+      style={{ 
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%', 
+        height: '100%'
+      }}
     />
   );
 }
