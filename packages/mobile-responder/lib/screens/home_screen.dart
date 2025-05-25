@@ -252,7 +252,6 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       if (mounted) {
-        setState(() {}); // UI 업데이트
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(!currentStatus ? '알림이 켜졌습니다' : '알림이 꺼졌습니다'),
@@ -261,39 +260,16 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     } catch (e) {
-      debugPrint('[HomeScreen] 알림 토글 오류: $e');
+      debugPrint('[MainScreen] 알림 토글 오류: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 탭뷰 모드일 때는 Scaffold 없이 본문만 반환
-    if (widget.isTabView) {
-      return _buildBody();
-    }
-
-    // 기존 독립 화면 모드
     return Scaffold(
       appBar: AppBar(
         title: const Text('재난 대응 시스템'),
         actions: [
-          // 알림 토글 추가
-          FutureBuilder<bool>(
-            future: _getNotificationStatus(),
-            builder: (context, snapshot) {
-              final isEnabled = snapshot.data ?? true;
-              return IconButton(
-                icon: Icon(
-                  isEnabled
-                      ? Icons.notifications_active
-                      : Icons.notifications_off,
-                  color: isEnabled ? Colors.white : Colors.grey[300],
-                ),
-                onPressed: _toggleNotifications,
-                tooltip: isEnabled ? '알림 켜짐' : '알림 꺼짐',
-              );
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _isLoading ? null : _refresh,
@@ -315,7 +291,22 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: [
         // 필터 영역
-        _buildFilterSection(),
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip("전체"),
+                _buildFilterChip("화재"),
+                _buildFilterChip("구급"),
+                _buildFilterChip("구조"),
+                _buildFilterChip("기타"),
+              ],
+            ),
+          ),
+        ),
 
         // 활성 임무 상태 배너 추가
         if (_hasActiveMission)
@@ -347,21 +338,45 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 필터 섹션 위젯 (기타 탭 추가)
+  // 필터 섹션 위젯
   Widget _buildFilterSection() {
-    return Padding(
+    return Container(
+      color: Colors.white,
       padding: const EdgeInsets.all(8.0),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _buildFilterChip("전체"),
-            _buildFilterChip("화재"),
-            _buildFilterChip("구급"),
-            _buildFilterChip("구조"),
-            _buildFilterChip("기타"), // 기타 탭 추가
-          ],
-        ),
+      child: Column(
+        children: [
+          // 새로고침 버튼을 필터 위에 배치
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: _isLoading ? null : _refresh,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('새로고침'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey[700],
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // 필터 칩들
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFilterChip("전체"),
+                _buildFilterChip("화재"),
+                _buildFilterChip("구급"),
+                _buildFilterChip("구조"),
+                _buildFilterChip("기타"),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

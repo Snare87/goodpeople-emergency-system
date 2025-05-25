@@ -36,8 +36,8 @@ void main() async {
     // 백그라운드 메시지 핸들러 설정
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // 알림 서비스 초기화 - void를 반환하는 함수이므로 await 제거
-    NotificationService().initialize();
+    // 알림 서비스 초기화 - Future<void>를 반환하므로 await 사용
+    await NotificationService().initialize();
     debugPrint('✅ 알림 서비스 초기화 완료');
 
     // 초기화 성공 - 정상 앱 실행

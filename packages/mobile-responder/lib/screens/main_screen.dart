@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:goodpeople_responder/screens/home_screen.dart';
 import 'package:goodpeople_responder/screens/my_missions_screen.dart';
 import 'package:goodpeople_responder/screens/profile_info_screen.dart';
@@ -25,7 +26,7 @@ class _MainScreenState extends State<MainScreen> {
     _pages = [
       const HomeScreen(isTabView: true), // 탭뷰 모드로 설정
       const MyMissionsScreen(),
-      const ProfileInfoScreen(), // 프로필 페이지 추가
+      const ProfileInfoScreen(),
     ];
     _listenToActiveMissions();
   }
@@ -54,6 +55,46 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  // 알림 상태 가져오기
+  Future<bool> _getNotificationStatus() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return true;
+
+    try {
+      final snapshot =
+          await FirebaseDatabase.instance
+              .ref('users/$userId/notificationEnabled')
+              .get();
+      return snapshot.value as bool? ?? true;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  // 알림 토글
+  Future<void> _toggleNotifications() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    try {
+      final currentStatus = await _getNotificationStatus();
+      await FirebaseDatabase.instance.ref('users/$userId').update({
+        'notificationEnabled': !currentStatus,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(!currentStatus ? '알림이 켜졌습니다' : '알림이 꺼졌습니다'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[MainScreen] 알림 토글 오류: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -62,6 +103,23 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: Colors.red,
         foregroundColor: Colors.white,
         actions: [
+          // 알림 토글
+          FutureBuilder<bool>(
+            future: _getNotificationStatus(),
+            builder: (context, snapshot) {
+              final isEnabled = snapshot.data ?? true;
+              return IconButton(
+                icon: Icon(
+                  isEnabled
+                      ? Icons.notifications_active
+                      : Icons.notifications_off,
+                  color: isEnabled ? Colors.white : Colors.grey[300],
+                ),
+                onPressed: _toggleNotifications,
+                tooltip: isEnabled ? '알림 켜짐' : '알림 꺼짐',
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _logout,

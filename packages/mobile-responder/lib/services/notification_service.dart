@@ -17,64 +17,85 @@ class NotificationService {
 
   // 초기화
   Future<void> initialize() async {
-    // 알림 권한 요청
-    await _messaging.requestPermission(alert: true, badge: true, sound: true);
+    try {
+      // 알림 권한 요청
+      final settings = await _messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false, // iOS에서 임시 권한 대신 명시적 권한 요청
+      );
 
-    // FCM 토큰 가져오기 및 저장
-    await updateFcmToken();
+      debugPrint('알림 권한 상태: ${settings.authorizationStatus}');
 
-    // 로컬 알림 초기화
-    const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
-    );
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-    const initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
+      // 권한이 거부된 경우
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        debugPrint('알림 권한이 거부되었습니다');
+        return;
+      }
 
-    await _localNotifications.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse details) {
-        _handleNotificationTap(details.payload);
-      },
-    );
+      // FCM 토큰 가져오기 및 저장
+      await updateFcmToken();
 
-    // 안드로이드 알림 채널 설정
-    const androidChannel = AndroidNotificationChannel(
-      'emergency_channel',
-      '긴급 알림',
-      description: '재난 상황 및 긴급 알림',
-      importance: Importance.high,
-    );
+      // 로컬 알림 초기화
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
+      const iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
+      const initSettings = InitializationSettings(
+        android: androidSettings,
+        iOS: iosSettings,
+      );
 
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(androidChannel);
+      await _localNotifications.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse details) {
+          _handleNotificationTap(details.payload);
+        },
+      );
 
-    // 포그라운드 메시지 처리
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+      // 안드로이드 알림 채널 설정
+      const androidChannel = AndroidNotificationChannel(
+        'emergency_channel',
+        '긴급 알림',
+        description: '재난 상황 및 긴급 알림',
+        importance: Importance.high,
+        playSound: true,
+        enableVibration: true,
+      );
 
-    // 앱이 백그라운드에서 시작되는 메시지 처리
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(androidChannel);
 
-    // 앱이 종료된 상태에서 시작되는 처리
-    final initialMsg = await _messaging.getInitialMessage();
-    if (initialMsg != null) {
-      _handleInitialMessage(initialMsg);
+      // 포그라운드 메시지 처리
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+
+      // 앱이 백그라운드에서 시작되는 메시지 처리
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+
+      // 앱이 종료된 상태에서 시작되는 처리
+      final initialMsg = await _messaging.getInitialMessage();
+      if (initialMsg != null) {
+        _handleInitialMessage(initialMsg);
+      }
+
+      // 토큰 리프레시 리스너
+      _messaging.onTokenRefresh.listen((newToken) {
+        debugPrint('FCM 토큰 리프레시: $newToken');
+        _saveFcmToken(newToken);
+      });
+
+      debugPrint('NotificationService 초기화 완료');
+    } catch (e) {
+      debugPrint('NotificationService 초기화 오류: $e');
     }
-
-    // 토큰 리프레시 리스너
-    _messaging.onTokenRefresh.listen((newToken) {
-      debugPrint('FCM 토큰 리프레시: $newToken');
-      _saveFcmToken(newToken);
-    });
   }
 
   // FCM 토큰 업데이트
