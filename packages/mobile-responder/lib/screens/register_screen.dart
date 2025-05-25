@@ -24,7 +24,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _selectedDepartment = '전북소방본부';
   String _selectedRank = '소방사';
   String _selectedPosition = '화재진압대원';
-  List<String> _certifications = <String>[]; // 명시적 타입 지정
+  final List<String> _certifications = <String>[]; // 명시적 타입 지정
 
   bool _isLoading = false;
   String? _errorMessage;

@@ -7,6 +7,7 @@ import 'package:goodpeople_responder/models/call.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:goodpeople_responder/services/location_service.dart';
 import 'package:goodpeople_responder/services/call_data_service.dart';
+import 'package:goodpeople_responder/services/background_location_service.dart';
 import 'dart:async';
 
 class ActiveMissionScreen extends StatefulWidget {
@@ -32,6 +33,8 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
     _loadMissionData();
     _getCurrentPosition();
     _startTracking();
+    // 활성 임무 중에는 30초마다 위치 업데이트
+    BackgroundLocationService().startActiveMissionTracking();
   }
 
   @override
@@ -39,6 +42,8 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
     LocationService().stopTracking();
     _callSubscription?.cancel();
     mapController = null;
+    // 일반 백그라운드 추적으로 돌아가기 (3분 간격)
+    BackgroundLocationService().startBackgroundTracking();
     super.dispose();
   }
 

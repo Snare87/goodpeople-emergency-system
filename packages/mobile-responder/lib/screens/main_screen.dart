@@ -1,8 +1,8 @@
-// lib/screens/main_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:goodpeople_responder/screens/home_screen.dart';
 import 'package:goodpeople_responder/screens/my_missions_screen.dart';
+import 'package:goodpeople_responder/screens/profile_info_screen.dart';
 import 'package:goodpeople_responder/screens/login_screen.dart';
 import 'package:goodpeople_responder/services/call_data_service.dart';
 
@@ -25,6 +25,7 @@ class _MainScreenState extends State<MainScreen> {
     _pages = [
       const HomeScreen(isTabView: true), // 탭뷰 모드로 설정
       const MyMissionsScreen(),
+      const ProfileInfoScreen(), // 프로필 페이지 추가
     ];
     _listenToActiveMissions();
   }
@@ -57,7 +58,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_currentIndex == 0 ? '재난 대응 시스템' : '내 임무'),
+        title: Text(_getTitle()),
         backgroundColor: Colors.red,
         foregroundColor: Colors.white,
         actions: [
@@ -114,8 +115,25 @@ class _MainScreenState extends State<MainScreen> {
             ),
             label: '내 임무',
           ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: '내 정보',
+          ),
         ],
       ),
     );
+  }
+
+  String _getTitle() {
+    switch (_currentIndex) {
+      case 0:
+        return '재난 대응 시스템';
+      case 1:
+        return '내 임무';
+      case 2:
+        return '내 정보';
+      default:
+        return '재난 대응 시스템';
+    }
   }
 }

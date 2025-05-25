@@ -9,6 +9,7 @@ import 'screens/main_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:goodpeople_responder/services/notification_service.dart';
+import 'package:goodpeople_responder/services/background_location_service.dart';
 
 // 백그라운드 메시지 핸들러 설정 (최상위 함수여야 함)
 @pragma('vm:entry-point')
@@ -95,7 +96,8 @@ class MyApp extends StatelessWidget {
           // 인증 상태에 따라 화면 분기
           if (snapshot.connectionState == ConnectionState.active) {
             if (snapshot.hasData) {
-              // 로그인된 상태 - MainScreen으로 변경
+              // 로그인된 상태 - 백그라운드 위치 추적 시작
+              _startBackgroundServices();
               return const MainScreen();
             } else {
               // 로그인되지 않은 상태
@@ -109,6 +111,15 @@ class MyApp extends StatelessWidget {
         },
       ),
     );
+  }
+
+  // 백그라운드 서비스 시작
+  void _startBackgroundServices() {
+    // 백그라운드 위치 추적 시작
+    BackgroundLocationService().startBackgroundTracking();
+
+    // FCM 토큰 업데이트
+    NotificationService().updateFcmToken();
   }
 }
 

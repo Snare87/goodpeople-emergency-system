@@ -326,7 +326,7 @@ class _MissionCardState extends State<MissionCard> {
     final diff = now - startAt;
     final seconds = diff ~/ 1000;
 
-    if (seconds < 60) return '${seconds}초 경과';
+    if (seconds < 60) return '$seconds초 경과';
     if (seconds < 3600) return '${seconds ~/ 60}분 경과';
     return '${seconds ~/ 3600}시간 ${(seconds % 3600) ~/ 60}분 경과';
   }

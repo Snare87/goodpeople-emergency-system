@@ -77,17 +77,6 @@ export const completeCall = (id) => {
   });
 };
 
-// 재호출 (수정된 버전)
-export const reactivateCall = (id) => {
-  return update(ref(db, `calls/${id}`), { 
-    status: 'dispatched',
-    completedAt: null,
-    dispatchedAt: Date.now(),
-    acceptedAt: null,      // 추가: 이전 수락 시간 삭제
-    responder: null        // 기존 코드에 이미 있음
-  });
-};
-
 // 호출취소 (수정된 버전)
 export const cancelCall = async (id) => {
   // 먼저 현재 상태 확인
@@ -99,14 +88,38 @@ export const cancelCall = async (id) => {
     
     // dispatched 상태이고 responder가 없을 때만 취소 가능
     if (callData.status === 'dispatched' && !callData.responder) {
+      const currentCancellationCount = callData.cancellationCount || 0;
+      
       return update(callRef, { 
         status: 'idle',
         dispatchedAt: null,
         acceptedAt: null,
-        responder: null
+        responder: null,
+        cancelledAt: Date.now(),
+        cancellationCount: currentCancellationCount + 1
       });
     }
   }
   
   throw new Error('취소할 수 없는 상태입니다.');
+};
+
+// 재호출 (수정된 버전)
+export const reactivateCall = (id) => {
+  return get(ref(db, `calls/${id}`)).then(snapshot => {
+    if (snapshot.exists()) {
+      const callData = snapshot.val();
+      const currentReactivationCount = callData.reactivationCount || 0;
+      
+      return update(ref(db, `calls/${id}`), { 
+        status: 'dispatched',
+        completedAt: null,
+        dispatchedAt: Date.now(),
+        acceptedAt: null,
+        responder: null,
+        reactivatedAt: Date.now(),
+        reactivationCount: currentReactivationCount + 1
+      });
+    }
+  });
 };

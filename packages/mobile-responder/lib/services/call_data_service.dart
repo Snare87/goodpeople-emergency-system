@@ -164,7 +164,7 @@ class CallDataService {
     } catch (e, stackTrace) {
       debugPrint('[CallDataService] 활성 임무 스트림 설정 오류: $e');
       debugPrint(stackTrace.toString());
-      activeMissionsController?.addError(e);
+      activeMissionsController.addError(e);
     }
 
     return activeMissionsController.stream;
