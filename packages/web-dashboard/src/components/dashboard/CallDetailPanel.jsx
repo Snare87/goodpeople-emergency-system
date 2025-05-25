@@ -4,6 +4,7 @@ import EmptyState from '../common/EmptyState';
 import CallStatusButtons from './CallStatusButtons';
 import DispatchInfoCard from './DispatchInfoCard';
 import ResponderInfo from './ResponderInfo';
+
 import SituationInfo from './SituationInfo';
 
 const CallDetailPanel = ({ 
