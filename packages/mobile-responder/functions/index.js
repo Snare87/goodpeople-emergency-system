@@ -2,7 +2,11 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 
-admin.initializeApp();
+// 명시적으로 프로젝트 ID 설정
+admin.initializeApp({
+  projectId: "goodpeople-95f54",
+  databaseURL: "https://goodpeople-95f54-default-rtdb.asia-southeast1.firebasedatabase.app"
+});
 
 // 리전을 asia-southeast1로 설정
 const region = "asia-southeast1";
@@ -73,7 +77,7 @@ exports.sendCallNotification = functions
       return null;
     }
     
-    console.log(`Sending ${notificationType} notification for call ${callId}`);
+    console.log(`✅ ${notificationType} 알림 발송 시작`);
     
     // 재난 위치
     const callLat = after.lat;
@@ -88,6 +92,8 @@ exports.sendCallNotification = functions
     
     console.log(`\n🔍 대상 사용자 검색 시작`);
     console.log(`재난 위치: ${callLat}, ${callLng}`);
+    console.log(`재난 유형: ${after.eventType}`);
+    console.log(`재난 주소: ${after.address}`);
     
     // 5km 이내 사용자 필터링
     for (const [userId, userData] of Object.entries(users)) {
@@ -95,11 +101,13 @@ exports.sendCallNotification = functions
       if (userData.status !== 'approved' || 
           !userData.notificationEnabled || 
           !userData.permissions?.app) {
+        console.log(`User ${userId} - 필터링됨 (status: ${userData.status}, notif: ${userData.notificationEnabled}, app: ${userData.permissions?.app})`);
         continue;
       }
       
       // FCM 토큰이 있는지 확인
       if (!userData.fcmToken) {
+        console.log(`User ${userId} - FCM 토큰 없음`);
         continue;
       }
       
@@ -116,18 +124,18 @@ exports.sendCallNotification = functions
         if (distance <= 5) {
           tokens.push(userData.fcmToken);
           userIds.push(userId);
-          console.log(`User ${userId} is ${distance.toFixed(2)}km away - sending notification`);
+          console.log(`✅ User ${userId} (${userData.name}) - ${distance.toFixed(2)}km 거리 - 알림 발송 대상`);
         } else {
-          console.log(`User ${userId} is ${distance.toFixed(2)}km away - too far`);
+          console.log(`❌ User ${userId} - ${distance.toFixed(2)}km 거리 - 5km 초과`);
         }
       } else if (userData.locationEnabled === false) {
         // 위치 정보를 제공하지 않는 사용자는 알림 제외
-        console.log(`User ${userId} has location disabled - skipping`);
+        console.log(`User ${userId} - 위치 정보 제공 안함`);
       } else {
         // 위치 정보가 없지만 위치 권한이 켜져있는 경우 (신규 사용자 등) 알림 전송
         tokens.push(userData.fcmToken);
         userIds.push(userId);
-        console.log(`User ${userId} has no location yet - sending notification`);
+        console.log(`⚠️ User ${userId} - 위치 정보 없음 - 기본 알림 발송`);
       }
     }
     
@@ -146,6 +154,7 @@ exports.sendCallNotification = functions
       body: `${after.eventType} - ${after.address}`,
     };
     
+    // 추가 데이터
     const data = {
       type: notificationType,
       callId: callId,
@@ -154,6 +163,7 @@ exports.sendCallNotification = functions
       lat: String(callLat),
       lng: String(callLng),
       info: after.info || '',
+      click_action: 'FLUTTER_NOTIFICATION_CLICK', // 중요: Flutter에서 클릭 처리를 위해 필요
     };
     
     // FCM 메시지 전송
@@ -167,6 +177,9 @@ exports.sendCallNotification = functions
           channelId: 'emergency_channel',
           priority: 'high',
           sound: 'default',
+          defaultSound: true,
+          notificationCount: 1,
+          visibility: 'public',
         },
       },
       apns: {
@@ -174,13 +187,25 @@ exports.sendCallNotification = functions
           aps: {
             sound: 'default',
             badge: 1,
+            contentAvailable: true,
+            alert: {
+              title: notification.title,
+              body: notification.body,
+            },
           },
+        },
+        headers: {
+          'apns-priority': '10',
         },
       },
     };
     
     try {
+      console.log('\n📨 FCM 메시지 전송 중...');
+      console.log('메시지 구조:', JSON.stringify(message, null, 2));
+      
       const response = await admin.messaging().sendMulticast(message);
+      
       console.log(`\n📨 FCM 전송 결과:`);
       console.log(`✅ 성공: ${response.successCount}개`);
       console.log(`❌ 실패: ${response.failureCount}개`);
@@ -190,6 +215,16 @@ exports.sendCallNotification = functions
         response.responses.forEach((resp, idx) => {
           if (!resp.success) {
             console.log(`실패 - 사용자 ${userIds[idx]}: ${resp.error.message}`);
+            console.log(`실패한 토큰: ${tokens[idx].substring(0, 20)}...`);
+          }
+        });
+      }
+      
+      // 성공한 경우 상세 로그
+      if (response.successCount > 0) {
+        response.responses.forEach((resp, idx) => {
+          if (resp.success) {
+            console.log(`성공 - 사용자 ${userIds[idx]}: 메시지 ID ${resp.messageId}`);
           }
         });
       }
@@ -201,11 +236,14 @@ exports.sendCallNotification = functions
         successCount: response.successCount,
         failureCount: response.failureCount,
         timestamp: admin.database.ServerValue.TIMESTAMP,
+        eventType: after.eventType,
+        address: after.address,
       });
       
       console.log(`========== 알림 처리 완료 ==========\n`);
     } catch (error) {
       console.error('❌ FCM 전송 오류:', error);
+      console.error('오류 상세:', error.stack);
       console.log(`========== 알림 처리 실패 ==========\n`);
     }
     
@@ -235,6 +273,8 @@ exports.updateUserLocation = functions
         updatedAt: admin.database.ServerValue.TIMESTAMP,
       });
       
+      console.log(`✅ 사용자 ${userId} 위치 업데이트: ${lat}, ${lng}`);
+      
       return { success: true };
     } catch (error) {
       console.error('Error updating location:', error);
@@ -259,9 +299,52 @@ exports.updateFcmToken = functions
     
     try {
       await admin.database().ref(`users/${userId}/fcmToken`).set(token);
+      console.log(`✅ 사용자 ${userId} FCM 토큰 업데이트 완료`);
+      
       return { success: true };
     } catch (error) {
       console.error('Error updating FCM token:', error);
       throw new functions.https.HttpsError('internal', 'Failed to update token');
+    }
+  });
+
+// 테스트용 FCM 전송 함수
+exports.testFcmSend = functions
+  .region(region)
+  .https.onCall(async (data, context) => {
+    const { token } = data;
+    
+    if (!token) {
+      throw new functions.https.HttpsError('invalid-argument', 'token is required');
+    }
+    
+    const testMessage = {
+      notification: {
+        title: '🚨 테스트 알림',
+        body: '이것은 테스트 메시지입니다',
+      },
+      data: {
+        type: 'test',
+        timestamp: String(Date.now()),
+      },
+      token: token,
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'emergency_channel',
+          priority: 'high',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+        },
+      },
+    };
+    
+    try {
+      const response = await admin.messaging().send(testMessage);
+      console.log('✅ 테스트 메시지 전송 성공:', response);
+      return { success: true, messageId: response };
+    } catch (error) {
+      console.error('❌ 테스트 메시지 전송 실패:', error);
+      throw new functions.https.HttpsError('internal', error.message);
     }
   });

@@ -138,7 +138,8 @@ class NotificationService {
 
   // 포그라운드 메시지 처리
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    debugPrint('포그라운드 메시지 수신: ${message.notification?.title}');
+    debugPrint('🔔 포그라운드 메시지 수신: ${message.notification?.title}');
+    debugPrint('📱 메시지 데이터: ${message.data}');
 
     // 사용자의 알림 설정 확인
     final user = FirebaseAuth.instance.currentUser;
@@ -163,28 +164,28 @@ class NotificationService {
       debugPrint('✅ [NotificationService] 알림 표시 진행');
     }
 
-    if (message.notification != null) {
+    // notification 또는 data 중 하나라도 있으면 알림 표시
+    if (message.notification != null || message.data.isNotEmpty) {
       // 알림 타입에 따른 처리
       final notificationType = message.data['type'] ?? 'new_call';
-      // ignore: unused_local_variable
       final eventType = message.data['eventType'] ?? '재난';
-      // ignore: unused_local_variable
       final address = message.data['address'] ?? '';
 
-      String title = message.notification?.title ?? '새 알림';
-      String body = message.notification?.body ?? '';
+      String title =
+          message.notification?.title ??
+          (notificationType == 'recall' ? '🚨 재난 재호출' : '🚨 긴급 출동');
+      String body = message.notification?.body ?? '$eventType - $address';
 
-      // 타입별 커스터마이징
-      if (notificationType == 'recall') {
-        title = '🚨 재난 재호출';
-      }
+      debugPrint('🔔 로컬 알림 표시: $title - $body');
 
       await _showLocalNotification(
-        id: message.hashCode,
+        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
         title: title,
         body: body,
         payload: message.data.toString(),
       );
+    } else {
+      debugPrint('⚠️ 알림 데이터가 없습니다');
     }
   }
 

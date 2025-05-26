@@ -5,6 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
+import 'package:cloud_functions/cloud_functions.dart'; // Import added
 
 class ProfileInfoScreen extends StatefulWidget {
   const ProfileInfoScreen({super.key});
@@ -195,10 +196,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
 
       // 저장 후 확인
       debugPrint('\n📱 [내 정보 저장] 설정 상태:');
-      debugPrint('  - 알림 수신: ${_notificationEnabled ? "켜짐 🔔" : "꺼짐 🔕"}');
-      debugPrint('  - 위치 정보: ${_locationEnabled ? "켜짐 📍" : "꺼짐 📍"}');
+      debugPrint('   - 알림 수신: ${_notificationEnabled ? "켜짐 🔔" : "꺼짐 🔕"}');
+      debugPrint('   - 위치 정보: ${_locationEnabled ? "켜짐 📍" : "꺼짐 📍"}');
       debugPrint(
-        '  - 백그라운드 알림: ${_backgroundNotificationEnabled ? "켜짐 🔔" : "꺼짐 🔕"}',
+        '   - 백그라운드 알림: ${_backgroundNotificationEnabled ? "켜짐 🔔" : "꺼짐 🔕"}',
       );
 
       // Firebase에서 다시 확인
@@ -207,10 +208,10 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       if (verifySnapshot.exists) {
         final data = verifySnapshot.value as Map;
         debugPrint('\n🔍 [Firebase 확인] 저장된 값:');
-        debugPrint('  - 알림: ${data['notificationEnabled'] ?? "null"}');
-        debugPrint('  - 위치: ${data['locationEnabled'] ?? "null"}');
+        debugPrint('   - 알림: ${data['notificationEnabled'] ?? "null"}');
+        debugPrint('   - 위치: ${data['locationEnabled'] ?? "null"}');
         debugPrint(
-          '  - 백그라운드: ${data['backgroundNotificationEnabled'] ?? "null"}',
+          '   - 백그라운드: ${data['backgroundNotificationEnabled'] ?? "null"}',
         );
       }
 
@@ -230,6 +231,44 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
         setState(() {
           _isSaving = false;
         });
+      }
+    }
+  }
+
+  // Cloud Functions 관련 메서드 추가
+  Future<void> _testFcmNotification() async {
+    try {
+      // 현재 FCM 토큰 가져오기
+      final fcmToken = await _getFcmToken();
+      if (fcmToken == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('FCM 토큰을 가져올 수 없습니다')));
+        return;
+      }
+
+      // Cloud Functions 호출
+      final functions = FirebaseFunctions.instance;
+      final callable = functions.httpsCallable('testFcmSend');
+
+      final result = await callable.call({'token': fcmToken});
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('테스트 알림 전송 성공: ${result.data['messageId']}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('테스트 알림 전송 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -557,6 +596,19 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                             },
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 16), // Added for spacing
+                      // FCM 알림 테스트 버튼 추가
+                      ElevatedButton(
+                        onPressed: _testFcmNotification,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: const Text(
+                          'FCM 알림 테스트',
+                          style: TextStyle(fontSize: 16),
+                        ),
                       ),
                     ],
                   ),
