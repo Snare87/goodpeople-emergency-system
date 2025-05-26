@@ -3,10 +3,12 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 
 // 명시적으로 프로젝트 ID 설정
-admin.initializeApp({
-  projectId: "goodpeople-95f54",
-  databaseURL: "https://goodpeople-95f54-default-rtdb.asia-southeast1.firebasedatabase.app"
-});
+// admin.initializeApp({
+//   projectId: "goodpeople-95f54",
+//   databaseURL: "https://goodpeople-95f54-default-rtdb.asia-southeast1.firebasedatabase.app"
+// });
+
+admin.initializeApp();
 
 // 리전을 asia-southeast1로 설정
 const region = "asia-southeast1";
@@ -166,75 +168,80 @@ exports.sendCallNotification = functions
       click_action: 'FLUTTER_NOTIFICATION_CLICK', // 중요: Flutter에서 클릭 처리를 위해 필요
     };
     
-    // FCM 메시지 전송
-    const message = {
-      notification,
-      data,
-      tokens,
-      android: {
-        priority: 'high',
-        notification: {
-          channelId: 'emergency_channel',
-          priority: 'high',
-          sound: 'default',
-          defaultSound: true,
-          notificationCount: 1,
-          visibility: 'public',
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
-            contentAvailable: true,
-            alert: {
-              title: notification.title,
-              body: notification.body,
-            },
-          },
-        },
-        headers: {
-          'apns-priority': '10',
-        },
-      },
-    };
-    
     try {
       console.log('\n📨 FCM 메시지 전송 중...');
-      console.log('메시지 구조:', JSON.stringify(message, null, 2));
       
-      const response = await admin.messaging().sendMulticast(message);
+      // 성공 및 실패 카운터
+      let successCount = 0;
+      let failureCount = 0;
+      const responses = [];
+      
+      // 각 토큰에 대해 개별적으로 메시지 전송 (HTTP v1 API 사용)
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        const userId = userIds[i];
+        
+        try {
+          // 개별 메시지 구성
+          const singleMessage = {
+            notification,
+            data,
+            token, // 여러 토큰 대신 하나의 토큰만 사용
+            android: {
+              priority: 'high',
+              notification: {
+                channelId: 'emergency_channel',
+                priority: 'high',
+                sound: 'default',
+                defaultSound: true,
+                notificationCount: 1,
+                visibility: 'public',
+              },
+            },
+            apns: {
+              payload: {
+                aps: {
+                  sound: 'default',
+                  badge: 1,
+                  contentAvailable: true,
+                  alert: {
+                    title: notification.title,
+                    body: notification.body,
+                  },
+                },
+              },
+              headers: {
+                'apns-priority': '10',
+              },
+            },
+          };
+          
+          // 단일 메시지 전송
+          const response = await admin.messaging().send(singleMessage);
+          
+          // 성공 로그
+          console.log(`성공 - 사용자 ${userId}: 메시지 ID ${response}`);
+          responses.push({ success: true, messageId: response });
+          successCount++;
+        } catch (error) {
+          // 실패 로그
+          console.log(`실패 - 사용자 ${userId}: ${error.message}`);
+          console.log(`실패한 토큰: ${token.substring(0, 20)}...`);
+          responses.push({ success: false, error: error });
+          failureCount++;
+        }
+      }
       
       console.log(`\n📨 FCM 전송 결과:`);
-      console.log(`✅ 성공: ${response.successCount}개`);
-      console.log(`❌ 실패: ${response.failureCount}개`);
-      
-      // 실패한 경우 상세 로그
-      if (response.failureCount > 0) {
-        response.responses.forEach((resp, idx) => {
-          if (!resp.success) {
-            console.log(`실패 - 사용자 ${userIds[idx]}: ${resp.error.message}`);
-            console.log(`실패한 토큰: ${tokens[idx].substring(0, 20)}...`);
-          }
-        });
-      }
-      
-      // 성공한 경우 상세 로그
-      if (response.successCount > 0) {
-        response.responses.forEach((resp, idx) => {
-          if (resp.success) {
-            console.log(`성공 - 사용자 ${userIds[idx]}: 메시지 ID ${resp.messageId}`);
-          }
-        });
-      }
+      console.log(`✅ 성공: ${successCount}개`);
+      console.log(`❌ 실패: ${failureCount}개`);
       
       // 알림 로그 저장
       await admin.database().ref(`notification_logs/${callId}/${Date.now()}`).set({
         type: notificationType,
         targetUsers: userIds,
-        successCount: response.successCount,
-        failureCount: response.failureCount,
+        successCount: successCount,
+        failureCount: failureCount,
         timestamp: admin.database.ServerValue.TIMESTAMP,
         eventType: after.eventType,
         address: after.address,
