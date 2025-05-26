@@ -1,8 +1,11 @@
 // functions/index.js
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
 
 admin.initializeApp();
+
+// 리전을 asia-southeast1로 설정
+const region = "asia-southeast1";
 
 // Haversine 공식으로 두 지점 간 거리 계산 (km)
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -22,12 +25,21 @@ function toRad(value) {
 }
 
 // 호출하기 알림 전송
-exports.sendCallNotification = functions.database
+exports.sendCallNotification = functions
+  .region(region)
+  .database
   .ref('/calls/{callId}')
   .onUpdate(async (change, context) => {
     const before = change.before.val();
     const after = change.after.val();
     const callId = context.params.callId;
+    
+    console.log(`\n========== 알림 처리 시작 ==========`);
+    console.log(`Call ID: ${callId}`);
+    console.log(`이전 상태: ${before.status}`);
+    console.log(`현재 상태: ${after.status}`);
+    console.log(`이전 dispatchedAt: ${before.dispatchedAt}`);
+    console.log(`현재 dispatchedAt: ${after.dispatchedAt}`);
     
     // 알림을 보내야 하는 경우들 체크
     let notificationType = null;
@@ -56,6 +68,8 @@ exports.sendCallNotification = functions.database
     }
     
     if (!shouldSendNotification) {
+      console.log('❌ 알림 발송 조건에 해당하지 않음');
+      console.log(`========== 알림 처리 종료 ==========\n`);
       return null;
     }
     
@@ -71,6 +85,9 @@ exports.sendCallNotification = functions.database
     
     const tokens = [];
     const userIds = [];
+    
+    console.log(`\n🔍 대상 사용자 검색 시작`);
+    console.log(`재난 위치: ${callLat}, ${callLng}`);
     
     // 5km 이내 사용자 필터링
     for (const [userId, userData] of Object.entries(users)) {
@@ -115,9 +132,13 @@ exports.sendCallNotification = functions.database
     }
     
     if (tokens.length === 0) {
-      console.log('No users to notify');
+      console.log('❌ 알림을 받을 대상이 없습니다');
+      console.log(`========== 알림 처리 종료 ==========\n`);
       return null;
     }
+    
+    console.log(`\n✅ 알림 대상: ${tokens.length}명`);
+    console.log(`대상 사용자 ID: ${userIds.join(', ')}`);
     
     // 알림 메시지 구성
     const notification = {
@@ -160,8 +181,18 @@ exports.sendCallNotification = functions.database
     
     try {
       const response = await admin.messaging().sendMulticast(message);
-      console.log(`Successfully sent ${response.successCount} messages`);
-      console.log(`Failed to send ${response.failureCount} messages`);
+      console.log(`\n📨 FCM 전송 결과:`);
+      console.log(`✅ 성공: ${response.successCount}개`);
+      console.log(`❌ 실패: ${response.failureCount}개`);
+      
+      // 실패한 경우 상세 로그
+      if (response.failureCount > 0) {
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            console.log(`실패 - 사용자 ${userIds[idx]}: ${resp.error.message}`);
+          }
+        });
+      }
       
       // 알림 로그 저장
       await admin.database().ref(`notification_logs/${callId}/${Date.now()}`).set({
@@ -172,59 +203,65 @@ exports.sendCallNotification = functions.database
         timestamp: admin.database.ServerValue.TIMESTAMP,
       });
       
+      console.log(`========== 알림 처리 완료 ==========\n`);
     } catch (error) {
-      console.error('Error sending messages:', error);
+      console.error('❌ FCM 전송 오류:', error);
+      console.log(`========== 알림 처리 실패 ==========\n`);
     }
     
     return null;
   });
 
 // 사용자 위치 업데이트
-exports.updateUserLocation = functions.https.onCall(async (data, context) => {
-  // 인증 확인
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
-  }
-  
-  const userId = context.auth.uid;
-  const { lat, lng } = data;
-  
-  if (!lat || !lng) {
-    throw new functions.https.HttpsError('invalid-argument', 'lat and lng are required');
-  }
-  
-  try {
-    await admin.database().ref(`users/${userId}/lastLocation`).set({
-      lat,
-      lng,
-      updatedAt: admin.database.ServerValue.TIMESTAMP,
-    });
+exports.updateUserLocation = functions
+  .region(region)
+  .https.onCall(async (data, context) => {
+    // 인증 확인
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
     
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating location:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to update location');
-  }
-});
+    const userId = context.auth.uid;
+    const { lat, lng } = data;
+    
+    if (!lat || !lng) {
+      throw new functions.https.HttpsError('invalid-argument', 'lat and lng are required');
+    }
+    
+    try {
+      await admin.database().ref(`users/${userId}/lastLocation`).set({
+        lat,
+        lng,
+        updatedAt: admin.database.ServerValue.TIMESTAMP,
+      });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating location:', error);
+      throw new functions.https.HttpsError('internal', 'Failed to update location');
+    }
+  });
 
 // FCM 토큰 업데이트
-exports.updateFcmToken = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
-  }
-  
-  const userId = context.auth.uid;
-  const { token } = data;
-  
-  if (!token) {
-    throw new functions.https.HttpsError('invalid-argument', 'token is required');
-  }
-  
-  try {
-    await admin.database().ref(`users/${userId}/fcmToken`).set(token);
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating FCM token:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to update token');
-  }
-});
+exports.updateFcmToken = functions
+  .region(region)
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+    
+    const userId = context.auth.uid;
+    const { token } = data;
+    
+    if (!token) {
+      throw new functions.https.HttpsError('invalid-argument', 'token is required');
+    }
+    
+    try {
+      await admin.database().ref(`users/${userId}/fcmToken`).set(token);
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating FCM token:', error);
+      throw new functions.https.HttpsError('internal', 'Failed to update token');
+    }
+  });

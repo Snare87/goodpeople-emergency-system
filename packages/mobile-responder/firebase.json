@@ -1,1 +1,24 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"goodpeople-95f54","appId":"1:24321943098:android:98c5ca96e29194c796f703","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"goodpeople-95f54","configurations":{"android":"1:24321943098:android:98c5ca96e29194c796f703"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "goodpeople-95f54",
+          "appId": "1:24321943098:android:98c5ca96e29194c796f703",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "goodpeople-95f54",
+          "configurations": {
+            "android": "1:24321943098:android:98c5ca96e29194c796f703"
+          }
+        }
+      }
+    }
+  },
+  "functions": {
+    "source": "functions"
+  }
+}
