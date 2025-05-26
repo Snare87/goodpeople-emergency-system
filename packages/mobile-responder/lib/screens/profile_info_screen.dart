@@ -5,7 +5,8 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
-import 'package:cloud_functions/cloud_functions.dart'; // Import added
+import 'package:cloud_functions/cloud_functions.dart';
+import '../widgets/profile/profile_widgets.dart';
 
 class ProfileInfoScreen extends StatefulWidget {
   const ProfileInfoScreen({super.key});
@@ -330,6 +331,18 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     }
   }
 
+  void _onCertificationChanged(String cert, bool value) {
+    setState(() {
+      if (value) {
+        if (!_certifications.contains(cert)) {
+          _certifications.add(cert);
+        }
+      } else {
+        _certifications.remove(cert);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -345,17 +358,19 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // 기본 정보 (수정 불가)
-                      _buildSectionTitle('기본 정보'),
-                      _buildInfoCard([
-                        _buildInfoRow('이름', _name ?? '-'),
-                        _buildInfoRow('이메일', _email ?? '-'),
-                        _buildInfoRow('소속', _department ?? '-'),
-                        _buildInfoRow('식별번호', _officialId ?? '-'),
-                      ]),
+                      const SectionTitle(title: '기본 정보'),
+                      InfoCard(
+                        children: [
+                          InfoRow(label: '이름', value: _name ?? '-'),
+                          InfoRow(label: '이메일', value: _email ?? '-'),
+                          InfoRow(label: '소속', value: _department ?? '-'),
+                          InfoRow(label: '식별번호', value: _officialId ?? '-'),
+                        ],
+                      ),
                       const SizedBox(height: 24),
 
                       // 수정 가능한 정보
-                      _buildSectionTitle('연락처 및 직무 정보'),
+                      const SectionTitle(title: '연락처 및 직무 정보'),
 
                       // 전화번호
                       TextFormField(
@@ -434,37 +449,16 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                       const SizedBox(height: 24),
 
                       // 자격증
-                      _buildSectionTitle('보유 자격증'),
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          children:
-                              _availableCertifications.map((cert) {
-                                return CheckboxListTile(
-                                  title: Text(cert),
-                                  value: _certifications.contains(cert),
-                                  onChanged: (bool? value) {
-                                    setState(() {
-                                      if (value == true) {
-                                        if (!_certifications.contains(cert)) {
-                                          _certifications.add(cert);
-                                        }
-                                      } else {
-                                        _certifications.remove(cert);
-                                      }
-                                    });
-                                  },
-                                );
-                              }).toList(),
-                        ),
+                      const SectionTitle(title: '보유 자격증'),
+                      CertificationSelector(
+                        availableCertifications: _availableCertifications,
+                        selectedCertifications: _certifications,
+                        onCertificationChanged: _onCertificationChanged,
                       ),
                       const SizedBox(height: 24),
 
                       // 동의 설정
-                      _buildSectionTitle('알림 및 권한 설정'),
+                      const SectionTitle(title: '알림 및 권한 설정'),
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.grey[50],
@@ -474,24 +468,24 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           children: [
-                            _buildSwitchTile(
-                              '알림 수신',
-                              '재난 호출 알림을 받습니다',
-                              Icons.notifications,
-                              _notificationEnabled,
-                              (value) {
+                            CustomSwitchTile(
+                              title: '알림 수신',
+                              subtitle: '재난 호출 알림을 받습니다',
+                              icon: Icons.notifications,
+                              value: _notificationEnabled,
+                              onChanged: (value) {
                                 setState(() {
                                   _notificationEnabled = value;
                                 });
                               },
                             ),
                             const Divider(),
-                            _buildSwitchTile(
-                              '위치 정보 제공',
-                              '현재 위치를 기반으로 가까운 재난 알림을 받습니다',
-                              Icons.location_on,
-                              _locationEnabled,
-                              (value) async {
+                            CustomSwitchTile(
+                              title: '위치 정보 제공',
+                              subtitle: '현재 위치를 기반으로 가까운 재난 알림을 받습니다',
+                              icon: Icons.location_on,
+                              value: _locationEnabled,
+                              onChanged: (value) async {
                                 debugPrint(
                                   '\n========== 위치 정보 설정 변경 시작 ==========',
                                 );
@@ -517,12 +511,12 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                               },
                             ),
                             const Divider(),
-                            _buildSwitchTile(
-                              '백그라운드 알림',
-                              '앱이 백그라운드에 있을 때도 알림을 받습니다',
-                              Icons.notifications_active,
-                              _backgroundNotificationEnabled,
-                              (value) {
+                            CustomSwitchTile(
+                              title: '백그라운드 알림',
+                              subtitle: '앱이 백그라운드에 있을 때도 알림을 받습니다',
+                              icon: Icons.notifications_active,
+                              value: _backgroundNotificationEnabled,
+                              onChanged: (value) {
                                 setState(() {
                                   _backgroundNotificationEnabled = value;
                                 });
@@ -560,138 +554,30 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // 디버그 정보 (FCM 토큰 표시)
-                      ExpansionTile(
-                        title: const Text(
-                          '디버그 정보',
-                          style: TextStyle(fontSize: 14, color: Colors.grey),
-                        ),
-                        children: [
-                          FutureBuilder<String?>(
-                            future: _getFcmToken(),
-                            builder: (context, snapshot) {
-                              return Container(
-                                padding: const EdgeInsets.all(12),
-                                color: Colors.grey[100],
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'FCM 토큰:',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      snapshot.data ?? '토큰 없음',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '알림 상태: ${_notificationEnabled ? "켜짐" : "꺼짐"}',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
+                      // 디버그 정보
+                      DebugInfo(notificationEnabled: _notificationEnabled),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // FCM 알림 테스트 버튼
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _testFcmNotification,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 16), // Added for spacing
-                      // FCM 알림 테스트 버튼 추가
-                      ElevatedButton(
-                        onPressed: _testFcmNotification,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: const Text(
-                          'FCM 알림 테스트',
-                          style: TextStyle(fontSize: 16),
+                          child: const Text(
+                            'FCM 알림 테스트',
+                            style: TextStyle(fontSize: 16),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Colors.red,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(List<Widget> children) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: Colors.grey,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSwitchTile(
-    String title,
-    String subtitle,
-    IconData icon,
-    bool value,
-    ValueChanged<bool> onChanged,
-  ) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: value ? Colors.red : Colors.grey),
-      title: Text(title),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-      trailing: Switch(
-        value: value,
-        onChanged: onChanged,
-        activeColor: Colors.red,
-      ),
     );
   }
 

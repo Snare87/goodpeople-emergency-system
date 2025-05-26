@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "monorepo-tools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./packages/mobile-responder",
+        "./packages/web-dashboard"
+      ]
+    }
+  }
+}
