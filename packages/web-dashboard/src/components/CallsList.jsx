@@ -4,7 +4,7 @@ import EmptyState from './common/EmptyState';
 import Badge from './common/Badge';
 import { formatTime, getElapsedTime } from '../utils/formatters';
 import { useTimer } from '../hooks/useTimer';
-import { CALL_TYPE_COLORS } from '../constants/callTypes';
+import { CALL_TYPE_COLORS } from '../constants';
 
 const CallListItem = memo(({ 
   call, 

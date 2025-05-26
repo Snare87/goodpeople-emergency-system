@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:goodpeople_responder/models/call.dart';
 import 'package:goodpeople_responder/services/call_data_service.dart';
 import 'package:goodpeople_responder/screens/active_mission_screen.dart';
+import 'package:goodpeople_responder/constants/constants.dart';
 import 'dart:async';
 
 class MyMissionsScreen extends StatefulWidget {
@@ -181,8 +182,10 @@ class _MissionCardState extends State<MissionCard> {
               Row(
                 children: [
                   Icon(
-                    _getEventTypeIcon(widget.mission.eventType),
-                    color: _getEventTypeColor(widget.mission.eventType),
+                    CallConstants.getEventTypeIcon(widget.mission.eventType),
+                    color: CallConstants.getEventTypeColor(
+                      widget.mission.eventType,
+                    ),
                     size: 28,
                   ),
                   const SizedBox(width: 12),
@@ -283,36 +286,6 @@ class _MissionCardState extends State<MissionCard> {
         ),
       ),
     );
-  }
-
-  IconData _getEventTypeIcon(String eventType) {
-    switch (eventType) {
-      case '화재':
-        return Icons.local_fire_department;
-      case '구급':
-        return Icons.medical_services;
-      case '구조':
-        return Icons.support;
-      case '기타':
-        return Icons.warning;
-      default:
-        return Icons.help_outline;
-    }
-  }
-
-  Color _getEventTypeColor(String eventType) {
-    switch (eventType) {
-      case '화재':
-        return Colors.red;
-      case '구조':
-        return Colors.blue;
-      case '구급':
-        return Colors.green;
-      case '기타':
-        return Colors.orange;
-      default:
-        return Colors.grey;
-    }
   }
 
   String _formatTime(int? timestamp) {

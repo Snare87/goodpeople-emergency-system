@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:goodpeople_responder/screens/login_screen.dart';
+import 'package:goodpeople_responder/constants/constants.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -21,36 +22,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phoneController = TextEditingController();
   final _officialIdController = TextEditingController();
 
-  String _selectedDepartment = '전북소방본부';
-  String _selectedRank = '소방사';
-  String _selectedPosition = '화재진압대원';
+  String _selectedDepartment = UserConstants.defaultDepartment;
+  String _selectedRank = UserConstants.defaultRank;
+  String _selectedPosition = UserConstants.defaultPosition;
   final List<String> _certifications = <String>[]; // 명시적 타입 지정
 
   bool _isLoading = false;
   String? _errorMessage;
-
-  final List<String> _departments = <String>['전북소방본부']; // 명시적 타입 지정
-
-  final List<String> _ranks = <String>[
-    // 명시적 타입 지정
-    '소방사', '소방교', '소방장', '소방위', '소방경', '소방령', '소방정',
-  ];
-
-  final List<String> _positions = <String>[
-    // 명시적 타입 지정
-    '화재진압대원', '구조대원', '구급대원',
-  ];
-
-  final List<String> _availableCertifications = <String>[
-    // 명시적 타입 지정
-    '응급구조사 1급',
-    '응급구조사 2급',
-    '간호사',
-    '화재대응능력 1급',
-    '화재대응능력 2급',
-    '인명구조사 1급',
-    '인명구조사 2급',
-  ];
 
   String _formatPhoneNumber(String value) {
     final numbers = value.replaceAll(RegExp(r'[^0-9]'), '');
@@ -412,7 +390,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     prefixIcon: Icon(Icons.business),
                   ),
                   items:
-                      _departments.map((dept) {
+                      UserConstants.departments.map((dept) {
                         return DropdownMenuItem(value: dept, child: Text(dept));
                       }).toList(),
                   onChanged: (value) {
@@ -431,7 +409,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     prefixIcon: Icon(Icons.military_tech),
                   ),
                   items:
-                      _ranks.map((rank) {
+                      UserConstants.ranks.map((rank) {
                         return DropdownMenuItem(value: rank, child: Text(rank));
                       }).toList(),
                   onChanged: (value) {
@@ -450,7 +428,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     prefixIcon: Icon(Icons.work),
                   ),
                   items:
-                      _positions.map((position) {
+                      UserConstants.positions.map((position) {
                         return DropdownMenuItem(
                           value: position,
                           child: Text(position),
@@ -472,7 +450,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   child: Column(
                     children:
-                        _availableCertifications.map((cert) {
+                        UserConstants.certifications.map((cert) {
                           return CheckboxListTile(
                             title: Text(cert),
                             value: _certifications.contains(cert),

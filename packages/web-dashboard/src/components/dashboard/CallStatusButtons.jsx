@@ -1,6 +1,7 @@
 // src/components/dashboard/CallStatusButtons.jsx
 import React from 'react';
-import { CALL_STATUS } from '../../constants/callTypes';
+import { CALL_STATUS } from '../../constants';
+
 
 const CallStatusButtons = ({ call, onDispatch, onComplete, onReactivate, onCancel }) => {
   if (!call) return null;

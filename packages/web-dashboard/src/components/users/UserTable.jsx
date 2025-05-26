@@ -1,9 +1,7 @@
 // src/components/users/UserTable.jsx
 import React from 'react';
 import Badge from '../common/Badge';
-import { USER_STATUS_LABELS } from '../../constants/userRoles';
-import { STATUS_BADGE_VARIANTS, POSITION_BADGE_VARIANTS } from '../../constants/badgeVariants';
-import { RANK_COLORS } from '../../constants/badgeVariants';
+import { USER_STATUS_LABELS, STATUS_BADGE_VARIANTS, POSITION_BADGE_VARIANTS, RANK_COLORS } from '../../constants';
 import UserActions from './UserActions';
 
 const UserTable = ({ users, onStatusUpdate, onPermissionsUpdate, isAdmin }) => {

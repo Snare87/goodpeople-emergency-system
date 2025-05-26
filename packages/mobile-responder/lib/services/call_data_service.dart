@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:goodpeople_responder/models/call.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:goodpeople_responder/services/location_service.dart';
+import 'package:goodpeople_responder/constants/constants.dart';
 
 class CallDataService {
   static final CallDataService _instance = CallDataService._internal();
@@ -122,14 +123,14 @@ class CallDataService {
                 );
 
                 // 5km(5000m) 이내인 경우만 추가
-                if (distance <= 5000) {
+                if (distance <= CallConstants.maxDistanceMeters) {
                   debugPrint(
-                    '[CallDataService] ✅ call $key 5km 이내! 거리: ${distance.toStringAsFixed(0)}m',
+                    '[CallDataService] ✅ call $key ${CallConstants.maxDistanceKm.toInt()}km 이내! 거리: ${distance.toStringAsFixed(0)}m',
                   );
                   availableCalls.add(call.copyWith(distance: distance));
                 } else {
                   debugPrint(
-                    '[CallDataService] ❌ call $key 5km 초과. 거리: ${distance.toStringAsFixed(0)}m',
+                    '[CallDataService] ❌ call $key ${CallConstants.maxDistanceKm.toInt()}km 초과. 거리: ${distance.toStringAsFixed(0)}m',
                   );
                 }
               } else {

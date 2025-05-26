@@ -1,7 +1,7 @@
 // src/components/dashboard/ResponderInfo.jsx
 import React, { useState, useEffect } from 'react';
 import Badge from '../common/Badge';
-import { POSITION_BADGE_VARIANTS } from '../../constants/badgeVariants';
+import { POSITION_BADGE_VARIANTS } from '../../constants';
 import { ref, get } from 'firebase/database';
 import { db } from '../../firebase';
 
