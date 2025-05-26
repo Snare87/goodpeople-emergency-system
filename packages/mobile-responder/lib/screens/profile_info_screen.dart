@@ -248,7 +248,9 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
       }
 
       // Cloud Functions 호출
-      final functions = FirebaseFunctions.instance;
+      final functions = FirebaseFunctions.instanceFor(
+        region: 'asia-southeast1',
+      );
       final callable = functions.httpsCallable('testFcmSend');
 
       final result = await callable.call({'token': fcmToken});

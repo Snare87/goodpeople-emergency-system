@@ -140,6 +140,12 @@ class NotificationService {
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     debugPrint('🔔 포그라운드 메시지 수신: ${message.notification?.title}');
     debugPrint('📱 메시지 데이터: ${message.data}');
+    debugPrint('📨 메시지 전체: ${message.toMap()}');
+
+    // 테스트 메시지 특별 처리
+    if (message.data['type'] == 'test') {
+      debugPrint('✅ 테스트 메시지 확인됨!');
+    }
 
     // 사용자의 알림 설정 확인
     final user = FirebaseAuth.instance.currentUser;
@@ -178,12 +184,17 @@ class NotificationService {
 
       debugPrint('🔔 로컬 알림 표시: $title - $body');
 
-      await _showLocalNotification(
-        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        title: title,
-        body: body,
-        payload: message.data.toString(),
-      );
+      try {
+        await _showLocalNotification(
+          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+          title: title,
+          body: body,
+          payload: message.data.toString(),
+        );
+        debugPrint('✅ 로컬 알림 표시 성공!');
+      } catch (e) {
+        debugPrint('❌ 로컬 알림 표시 실패: $e');
+      }
     } else {
       debugPrint('⚠️ 알림 데이터가 없습니다');
     }
@@ -196,6 +207,7 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
+    // final로 변경 (const 사용 불가)
     final androidDetails = AndroidNotificationDetails(
       'emergency_channel',
       '긴급 알림',
@@ -203,19 +215,19 @@ class NotificationService {
       importance: Importance.high,
       priority: Priority.high,
       ticker: '알림',
-      sound: RawResourceAndroidNotificationSound('default'),
+      // vibrationPattern은 런타임에 생성되므로 const 사용 불가
       vibrationPattern: Int64List.fromList([0, 1000, 500, 1000]),
       enableVibration: true,
       playSound: true,
     );
 
-    final iosDetails = DarwinNotificationDetails(
-      sound: 'default',
+    const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
     );
 
+    // androidDetails가 final이므로 notificationDetails도 final
     final notificationDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
