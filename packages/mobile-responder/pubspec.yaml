@@ -30,12 +30,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_dotenv: ^5.1.0
   firebase_core: 2.24.2  # 특정 버전으로 고정
   firebase_auth: 4.15.3  # 호환되는 버전
   firebase_database: 10.3.8
   firebase_messaging: 14.7.9
   cloud_functions: ^4.5.8
-  geolocator: ^14.0.0
+  geolocator: ^14.0.0  
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -98,4 +99,6 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
-
+  assets:
+    - .env
+    - assets/

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // ← 이거 추가!
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
@@ -22,21 +23,40 @@ void main() async {
   // Flutter 엔진과 위젯 바인딩 초기화
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 환경 변수 로드
+  try {
+    await dotenv.load(fileName: ".env");
+    debugPrint('✅ 환경 변수 로드 성공!');
+
+    // 환경 변수 테스트 출력 (일부만 보여주기)
+    debugPrint(
+      '🔑 Firebase API Key: ${dotenv.env['FIREBASE_API_KEY']?.substring(0, 10)}...',
+    );
+    debugPrint(
+      '🗺️ Google Maps Key: ${dotenv.env['GOOGLE_MAPS_API_KEY']?.substring(0, 10)}...',
+    );
+    debugPrint(
+      '🗺️ Kakao Maps Key: ${dotenv.env['KAKAO_MAPS_API_KEY']?.substring(0, 10)}...',
+    );
+  } catch (e) {
+    debugPrint('⚠️ 환경 변수 로드 실패 (개발 중에는 무시해도 됨): $e');
+  }
+
   // Firebase 초기화 시도
   try {
-    // Firebase 초기화
+    // Firebase 초기화 (기존 방식 그대로)
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     debugPrint('✅ Firebase 초기화 성공');
 
     // Firebase 데이터베이스 설정
-    _configureFirebaseDatabase(); // await 제거 (void 오류 방지)
+    _configureFirebaseDatabase();
 
     // 백그라운드 메시지 핸들러 설정
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // 알림 서비스 초기화 - Future<void>를 반환하므로 await 사용
+    // 알림 서비스 초기화
     await NotificationService().initialize();
     debugPrint('✅ 알림 서비스 초기화 완료');
 
