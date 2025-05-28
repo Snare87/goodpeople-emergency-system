@@ -280,7 +280,7 @@ class CallDataService {
     }
   }
 
-  // 재난 수락 (기존 로직 유지)
+  // 재난 수락 (상태 확인 추가)
   Future<bool> acceptCall(
     String callId,
     String responderId,
@@ -288,6 +288,29 @@ class CallDataService {
     String position,
   ) async {
     try {
+      // 먼저 현재 재난의 상태를 확인
+      final snapshot = await _callsRef.child(callId).get();
+      if (!snapshot.exists) {
+        debugPrint('[CallDataService] 재난 정보를 찾을 수 없습니다: $callId');
+        return false;
+      }
+
+      final callData = Map<String, dynamic>.from(snapshot.value as Map);
+      final call = Call.fromMap(callId, callData);
+      
+      // dispatched 상태가 아니면 수락 불가
+      if (call.status != 'dispatched') {
+        debugPrint('[CallDataService] 이미 처리된 재난이거나 호출이 취소되었습니다. status: ${call.status}');
+        return false;
+      }
+      
+      // 이미 다른 대원이 수락했는지 확인
+      if (call.responder != null) {
+        debugPrint('[CallDataService] 이미 다른 대원이 수락한 재난입니다. responder: ${call.responder?.name}');
+        return false;
+      }
+
+      // 상태 확인 후 수락 처리
       await _callsRef.child(callId).update({
         'status': 'accepted',
         'acceptedAt': DateTime.now().millisecondsSinceEpoch,

@@ -35,12 +35,14 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
   GoogleMapController? mapController;
   Timer? _timeUpdateTimer;
   DateTime _currentTime = DateTime.now();
+  StreamSubscription? _callListener;
 
   @override
   void initState() {
     super.initState();
     _loadCallDetails();
     _getCurrentPosition();
+    _listenToCallChanges(); // 실시간 변경 감지 추가
 
     // 60초마다 현재 시간 업데이트
     _timeUpdateTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
@@ -82,6 +84,54 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
     } catch (e) {
       debugPrint('재난 정보를 불러오는데 실패했습니다: $e');
     }
+  }
+  
+  // 재난 상태 변경 실시간 감지
+  void _listenToCallChanges() {
+    _callListener = db.ref("calls/${widget.callId}").onValue.listen((event) {
+      if (event.snapshot.exists && mounted) {
+        final newData = Map<String, dynamic>.from(event.snapshot.value as Map);
+        final oldStatus = callDetails?['status'];
+        final newStatus = newData['status'];
+        
+        setState(() {
+          callDetails = newData;
+        });
+        
+        // 호출이 취소되었을 때 알림
+        if (oldStatus == 'dispatched' && newStatus == 'idle') {
+          _showStatusChangeDialog('호출 취소', '이 재난의 호출이 취소되었습니다.');
+        }
+        // 다른 대원이 수락했을 때 알림
+        else if (oldStatus == 'dispatched' && newStatus == 'accepted' && newData['responder'] != null) {
+          final responderName = newData['responder']['name'] ?? '다른 대원';
+          _showStatusChangeDialog('수락 완료', '$responderName님이 이 재난을 수락했습니다.');
+        }
+      }
+    });
+  }
+  
+  // 상태 변경 알림 다이얼로그
+  void _showStatusChangeDialog(String title, String message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('🔔 $title'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pop(); // 상세 화면 닫기
+              },
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // 현재 위치 가져오기
@@ -222,6 +272,11 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         
         Map<String, dynamic> callData = Map<String, dynamic>.from(currentData as Map);
         
+        // status가 'dispatched'가 아니면 트랜잭션 취소 (중요!)
+        if (callData['status'] != 'dispatched') {
+          return Transaction.abort();
+        }
+        
         // 이미 수락된 경우 트랜잭션 취소
         if (callData['status'] == 'accepted' || callData['responder'] != null) {
           return Transaction.abort();
@@ -244,7 +299,21 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
       });
 
       if (!result.committed) {
-        // 트랜잭션 실패 - 다른 대원이 먼저 수락
+        // 트랜잭션 실패 - 상태 확인을 위해 최신 데이터 다시 조회
+        final latestSnapshot = await db.ref("calls/${widget.callId}").get();
+        String errorMessage = '수락할 수 없는 재난입니다.';
+        
+        if (latestSnapshot.exists) {
+          final latestData = Map<String, dynamic>.from(latestSnapshot.value as Map);
+          if (latestData['status'] == 'idle') {
+            errorMessage = '호출이 취소된 재난입니다.';
+          } else if (latestData['status'] == 'accepted' && latestData['responder'] != null) {
+            errorMessage = '다른 대원이 이미 이 재난을 수락했습니다.';
+          } else if (latestData['status'] == 'completed') {
+            errorMessage = '이미 종료된 재난입니다.';
+          }
+        }
+        
         if (mounted) {
           setState(() {
             accepting = false;
@@ -255,7 +324,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
             builder: (BuildContext context) {
               return AlertDialog(
                 title: const Text('⚠️ 수락 실패'),
-                content: const Text('다른 대원이 이미 이 재난을 수락했습니다.'),
+                content: Text(errorMessage),
                 actions: [
                   TextButton(
                     onPressed: () {
@@ -394,6 +463,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
   @override
   void dispose() {
     _timeUpdateTimer?.cancel();
+    _callListener?.cancel(); // 리스너 해제
     super.dispose();
   }
 

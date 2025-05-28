@@ -1,5 +1,5 @@
 // src/services/callService.ts
-import { ref, onValue, off, update, get, Unsubscribe } from 'firebase/database';
+import { ref, onValue, off, update, get, runTransaction, Unsubscribe } from 'firebase/database';
 import { db, auth } from '../firebase';
 import { FirebaseCall } from '../types/firebase';
 
@@ -62,25 +62,25 @@ export const dispatchCall = (id: string): Promise<void> => {
   });
 };
 
-// 대원 수락 - 실제 사용자 데이터를 가져오는 버전
+// 대원 수락 - Transaction을 사용한 개선된 버전
 export const acceptCall = async (
   id: string, 
   responderId: string = 'resp1', 
   responderName: string = '김구조'
 ): Promise<void> => {
   try {
-    // 현재 로그인한 사용자 정보 가져오기 (auth.currentUser 사용)
+    // 현재 로그인한 사용자 정보 가져오기
     const currentUser = auth.currentUser;
     if (!currentUser) {
       throw new Error('로그인한 사용자가 없습니다.');
     }
     
-    // 사용자 데이터 가져오기
+    // 사용자 데이터 먼저 가져오기
     const userSnapshot = await get(ref(db, `users/${currentUser.uid}`));
     let userData = {
       name: responderName,
-      position: '대원', // 기본값
-      rank: '소방사' // 기본값
+      position: '대원',
+      rank: '소방사'
     };
     
     if (userSnapshot.exists()) {
@@ -88,21 +88,58 @@ export const acceptCall = async (
       userData = {
         name: data.name || responderName,
         position: data.position || '대원',
-        rank: data.rank || '소방사' // 계급 추가
+        rank: data.rank || '소방사'
       };
     }
     
-    // 호출 수락 업데이트
-    return update(ref(db, `calls/${id}`), { 
-      status: 'accepted', 
-      acceptedAt: Date.now(),
-      responder: {
+    // Transaction을 사용한 원자적 업데이트
+    const callRef = ref(db, `calls/${id}`);
+    const result = await runTransaction(callRef, (currentData) => {
+      // 데이터가 없으면 취소
+      if (!currentData) {
+        return; // Transaction abort
+      }
+      
+      // status가 'dispatched'가 아니면 취소
+      if (currentData.status !== 'dispatched') {
+        return; // Transaction abort
+      }
+      
+      // 이미 다른 대원이 수락했으면 취소
+      if (currentData.responder) {
+        return; // Transaction abort
+      }
+      
+      // 모든 조건 통과 - 수락 처리
+      currentData.status = 'accepted';
+      currentData.acceptedAt = Date.now();
+      currentData.responder = {
         id: `resp_${currentUser.uid}_${Date.now()}`,
         name: userData.name,
         position: userData.position,
-        rank: userData.rank // 계급 추가
-      }
+        rank: userData.rank
+      };
+      
+      return currentData;
     });
+    
+    // Transaction 결과 확인
+    if (!result.committed) {
+      // 최신 상태 확인하여 상세한 에러 메시지 제공
+      const latestSnapshot = await get(callRef);
+      if (latestSnapshot.exists()) {
+        const latestData = latestSnapshot.val();
+        if (latestData.status === 'idle') {
+          throw new Error('호출이 취소된 재난입니다.');
+        } else if (latestData.status === 'accepted' && latestData.responder) {
+          throw new Error(`${latestData.responder.name}님이 이미 이 재난을 수락했습니다.`);
+        } else if (latestData.status === 'completed') {
+          throw new Error('이미 종료된 재난입니다.');
+        }
+      }
+      throw new Error('수락할 수 없는 재난입니다.');
+    }
+    
   } catch (error) {
     console.error('콜 수락 오류:', error);
     throw error;
@@ -117,31 +154,35 @@ export const completeCall = (id: string): Promise<void> => {
   });
 };
 
-// 호출취소 (수정된 버전)
+// 호출 취소 - Transaction 적용
 export const cancelCall = async (id: string): Promise<void> => {
-  // 먼저 현재 상태 확인
   const callRef = ref(db, `calls/${id}`);
-  const snapshot = await get(callRef);
   
-  if (snapshot.exists()) {
-    const callData = snapshot.val() as Call;
+  const result = await runTransaction(callRef, (currentData) => {
+    if (!currentData) {
+      return; // Transaction abort
+    }
     
     // dispatched 상태이고 responder가 없을 때만 취소 가능
-    if (callData.status === 'dispatched' && !callData.responder) {
-      const currentCancellationCount = callData.cancellationCount || 0;
+    if (currentData.status === 'dispatched' && !currentData.responder) {
+      const currentCancellationCount = currentData.cancellationCount || 0;
       
-      return update(callRef, { 
-        status: 'idle',
-        dispatchedAt: null,
-        acceptedAt: null,
-        responder: null,
-        cancelledAt: Date.now(),
-        cancellationCount: currentCancellationCount + 1
-      });
+      currentData.status = 'idle';
+      currentData.dispatchedAt = null;
+      currentData.acceptedAt = null;
+      currentData.responder = null;
+      currentData.cancelledAt = Date.now();
+      currentData.cancellationCount = currentCancellationCount + 1;
+      
+      return currentData;
     }
-  }
+    
+    return; // Transaction abort
+  });
   
-  throw new Error('취소할 수 없는 상태입니다.');
+  if (!result.committed) {
+    throw new Error('취소할 수 없는 상태입니다.');
+  }
 };
 
 // 재호출 (수정된 버전)
