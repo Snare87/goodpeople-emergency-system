@@ -34,6 +34,9 @@ class CallDataService {
 
     try {
       _callsRef.keepSynced(true);
+      
+      // 실시간 동기화를 위한 우선순위 설정
+      _callsRef.ref.setPriority(ServerValue.timestamp);
 
       _callsRef.onValue.listen(
         (event) async {

@@ -1,6 +1,7 @@
 // lib/providers/call_provider.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:goodpeople_responder/models/call.dart';
 import 'package:goodpeople_responder/services/call_data_service.dart';
@@ -162,6 +163,15 @@ class CallProvider extends ChangeNotifier {
   Future<void> refresh() async {
     _isLoading = true;
     notifyListeners();
+    
+    // Firebase 캐시 동기화 강제
+    try {
+      await FirebaseDatabase.instance.goOnline();
+      await Future.delayed(const Duration(milliseconds: 100));
+    } catch (e) {
+      debugPrint('[CallProvider] Firebase 동기화 오류: $e');
+    }
+    
     await getCurrentPosition();
     loadCalls();
   }

@@ -11,6 +11,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:goodpeople_responder/services/notification_service.dart';
 import 'package:goodpeople_responder/services/background_location_service.dart';
+import 'package:goodpeople_responder/services/firebase_optimization_service.dart';
 import 'package:provider/provider.dart';
 import 'package:goodpeople_responder/providers/call_provider.dart';
 
@@ -54,6 +55,9 @@ void main() async {
 
     // Firebase 데이터베이스 설정
     _configureFirebaseDatabase();
+    
+    // Firebase 최적화 서비스 초기화
+    await FirebaseOptimizationService().initialize();
 
     // 백그라운드 메시지 핸들러 설정
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
