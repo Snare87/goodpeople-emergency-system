@@ -11,6 +11,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:goodpeople_responder/services/notification_service.dart';
 import 'package:goodpeople_responder/services/background_location_service.dart';
+import 'package:provider/provider.dart';
+import 'package:goodpeople_responder/providers/call_provider.dart';
 
 // 백그라운드 메시지 핸들러 설정 (최상위 함수여야 함)
 @pragma('vm:entry-point')
@@ -106,29 +108,34 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'GoodPeople 응답자',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.red),
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          // 인증 상태에 따라 화면 분기
-          if (snapshot.connectionState == ConnectionState.active) {
-            if (snapshot.hasData) {
-              // 로그인된 상태 - 백그라운드 위치 추적 시작
-              _startBackgroundServices();
-              return const MainScreen();
-            } else {
-              // 로그인되지 않은 상태
-              return const LoginScreen();
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CallProvider()),
+      ],
+      child: MaterialApp(
+        title: 'GoodPeople 응답자',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(primarySwatch: Colors.red),
+        home: StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, snapshot) {
+            // 인증 상태에 따라 화면 분기
+            if (snapshot.connectionState == ConnectionState.active) {
+              if (snapshot.hasData) {
+                // 로그인된 상태 - 백그라운드 위치 추적 시작
+                _startBackgroundServices();
+                return const MainScreen();
+              } else {
+                // 로그인되지 않은 상태
+                return const LoginScreen();
+              }
             }
-          }
-          // 로딩 화면
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        },
+            // 로딩 화면
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          },
+        ),
       ),
     );
   }

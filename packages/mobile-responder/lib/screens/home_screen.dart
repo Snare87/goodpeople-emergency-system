@@ -1,12 +1,12 @@
-// packages/mobile-responder/lib/screens/home_screen.dart - 5km 반경 제한 적용
+// packages/mobile-responder/lib/screens/home_screen.dart - Provider 적용 버전
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:goodpeople_responder/screens/call_detail_screen.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:goodpeople_responder/services/location_service.dart';
 import 'package:goodpeople_responder/models/call.dart';
-import 'package:goodpeople_responder/services/call_data_service.dart';
 import 'package:goodpeople_responder/constants/constants.dart';
+import 'package:goodpeople_responder/providers/call_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool isTabView;
@@ -19,193 +19,38 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final CallDataService _callDataService = CallDataService();
-  final LocationService _locationService = LocationService();
-
-  List<Call> _allCalls = [];
-  List<Call> _filteredCalls = [];
-  bool _isLoading = true;
-  String _filterType = "전체";
-  Position? _currentPosition;
-  StreamSubscription? _callsSubscription;
-
   @override
   void initState() {
     super.initState();
     debugPrint('[HomeScreen] initState 호출됨');
-    _initializeScreen();
-
-    // 새로고침 콜백 전달
-    if (widget.onRefreshReady != null) {
-      widget.onRefreshReady!(_refresh);
-    }
-  }
-
-  @override
-  void dispose() {
-    debugPrint('[HomeScreen] dispose 호출됨');
-    _callsSubscription?.cancel();
-    super.dispose();
-  }
-
-  // 화면 초기화
-  Future<void> _initializeScreen() async {
-    await _checkLocationPermission(); // 위치 권한 확인 추가
-    await _getCurrentPosition();
-    _loadCalls();
-  }
-
-  // 위치 권한 체크 및 요청
-  Future<void> _checkLocationPermission() async {
-    LocationPermission permission = await Geolocator.checkPermission();
-
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-
-      if (permission == LocationPermission.denied && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('위치 권한이 필요합니다. 5km 이내 재난만 표시됩니다.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+    
+    // Provider 초기화
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<CallProvider>();
+      provider.initialize();
+      
+      // 새로고침 콜백 전달
+      if (widget.onRefreshReady != null) {
+        widget.onRefreshReady!(() => provider.refresh());
       }
-    }
-  }
-
-  // 현재 위치 가져오기
-  Future<void> _getCurrentPosition() async {
-    try {
-      final position = await _locationService.getCurrentPosition();
-      if (position != null && mounted) {
-        setState(() {
-          _currentPosition = position;
-        });
-      }
-    } catch (e) {
-      debugPrint('[HomeScreen] 위치 정보 가져오기 실패: $e');
-    }
-  }
-
-  // 재난 데이터 로드
-  void _loadCalls() {
-    debugPrint('[HomeScreen] _loadCalls 시작');
-    _callsSubscription?.cancel();
-
-    _callsSubscription = _callDataService.getAvailableCallsStream().listen(
-      (calls) {
-        if (mounted) {
-          setState(() {
-            _allCalls = calls;
-            _isLoading = false;
-          });
-          _applyCurrentFilter();
-        }
-      },
-      onError: (error) {
-        debugPrint('[HomeScreen] 데이터 수신 오류: $error');
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      },
-    );
-  }
-
-  // 현재 필터 적용
-  void _applyCurrentFilter() {
-    debugPrint(
-      '[HomeScreen] _applyCurrentFilter 시작: $_filterType, 원본 데이터 개수: ${_allCalls.length}',
-    );
-
-    List<Call> filtered = List.from(_allCalls);
-
-    if (_filterType != "전체") {
-      filtered =
-          filtered.where((call) => call.eventType == _filterType).toList();
-    }
-
-    debugPrint('[HomeScreen] 타입 필터링 후: ${filtered.length}개');
-
-    if (_currentPosition != null) {
-      _sortByDistance(filtered);
-    } else {
-      _sortByTime(filtered);
-    }
-
-    if (mounted) {
-      setState(() {
-        _filteredCalls = filtered;
-      });
-      debugPrint('[HomeScreen] 최종 필터링 결과: ${_filteredCalls.length}개');
-    }
-  }
-
-  // 거리순 정렬
-  void _sortByDistance(List<Call> calls) {
-    try {
-      if (_currentPosition == null) return;
-
-      for (int i = 0; i < calls.length; i++) {
-        final distance = Geolocator.distanceBetween(
-          _currentPosition!.latitude,
-          _currentPosition!.longitude,
-          calls[i].lat,
-          calls[i].lng,
-        );
-        calls[i] = calls[i].copyWith(distance: distance);
-      }
-      calls.sort((a, b) => a.distance.compareTo(b.distance));
-
-      for (var call in calls) {
-        debugPrint(
-          '[HomeScreen] ${call.eventType}: ${call.distance.toStringAsFixed(0)}m',
-        );
-      }
-    } catch (e) {
-      debugPrint('[HomeScreen] 거리 정렬 오류: $e');
-    }
-  }
-
-  // 시간순 정렬
-  void _sortByTime(List<Call> calls) {
-    try {
-      calls.sort((a, b) => b.startAt.compareTo(a.startAt));
-    } catch (e) {
-      debugPrint('[HomeScreen] 시간 정렬 오류: $e');
-    }
-  }
-
-  // 필터 변경
-  void _changeFilter(String filterType) {
-    debugPrint('[HomeScreen] 필터 변경: $_filterType -> $filterType');
-    setState(() {
-      _filterType = filterType;
     });
-    _applyCurrentFilter();
-  }
-
-  // 새로고침
-  Future<void> _refresh() async {
-    setState(() {
-      _isLoading = true;
-    });
-    await _getCurrentPosition();
-    _loadCalls();
   }
 
   @override
   Widget build(BuildContext context) {
-    return _buildBody();
+    return Consumer<CallProvider>(
+      builder: (context, provider, child) {
+        return _buildBody(provider);
+      },
+    );
   }
 
   // 본문 위젯
-  Widget _buildBody() {
+  Widget _buildBody(CallProvider provider) {
     return Column(
       children: [
         // 위치 정보 및 반경 표시 추가
-        if (_currentPosition != null)
+        if (provider.currentPosition != null)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.blue[50],
@@ -220,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 Text(
-                  '${_filteredCalls.length}건',
+                  '${provider.filteredCalls.length}건',
                   style: TextStyle(
                     color: Colors.blue[700],
                     fontWeight: FontWeight.bold,
@@ -239,25 +84,25 @@ class _HomeScreenState extends State<HomeScreen> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildFilterChip("전체"),
-                _buildFilterChip("화재"),
-                _buildFilterChip("구급"),
-                _buildFilterChip("구조"),
-                _buildFilterChip("기타"),
+                _buildFilterChip("전체", provider),
+                _buildFilterChip("화재", provider),
+                _buildFilterChip("구급", provider),
+                _buildFilterChip("구조", provider),
+                _buildFilterChip("기타", provider),
               ],
             ),
           ),
         ),
 
         // 재난 목록 영역
-        Expanded(child: _buildCallsList()),
+        Expanded(child: _buildCallsList(provider)),
       ],
     );
   }
 
   // 필터 칩 위젯
-  Widget _buildFilterChip(String label) {
-    final isSelected = _filterType == label;
+  Widget _buildFilterChip(String label, CallProvider provider) {
+    final isSelected = provider.filterType == label;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: ChoiceChip(
@@ -266,32 +111,32 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.transparent,
         selectedColor: Colors.red[100],
         side: BorderSide(color: isSelected ? Colors.red : Colors.grey[400]!),
-        onSelected: (selected) => _changeFilter(label),
+        onSelected: (selected) => provider.changeFilter(label),
       ),
     );
   }
 
   // 재난 목록 위젯
-  Widget _buildCallsList() {
-    if (_isLoading) {
+  Widget _buildCallsList(CallProvider provider) {
+    if (provider.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_filteredCalls.isEmpty) {
-      return _buildEmptyState();
+    if (provider.filteredCalls.isEmpty) {
+      return _buildEmptyState(provider);
     }
 
     return RefreshIndicator(
-      onRefresh: _refresh,
+      onRefresh: provider.refresh,
       child: Container(
         color: Colors.grey[50],
         child: ListView.builder(
-          itemCount: _filteredCalls.length,
+          itemCount: provider.filteredCalls.length,
           itemBuilder: (context, index) {
-            final call = _filteredCalls[index];
+            final call = provider.filteredCalls[index];
             return CallCard(
               call: call,
-              currentPosition: _currentPosition,
+              currentPosition: provider.currentPosition,
               onTap: () => _navigateToDetail(call),
               hasActiveMission: false,
             );
@@ -302,11 +147,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // 빈 상태 위젯
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(CallProvider provider) {
     String message =
-        _filterType == "전체"
+        provider.filterType == "전체"
             ? '5km 이내에 표시할 재난이 없습니다'
-            : '5km 이내에 $_filterType 재난이 없습니다';
+            : '5km 이내에 ${provider.filterType} 재난이 없습니다';
 
     return Center(
       child: Column(
@@ -321,7 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
             style: TextStyle(color: Colors.grey[500], fontSize: 14),
             textAlign: TextAlign.center,
           ),
-          if (_currentPosition == null) ...[
+          if (provider.currentPosition == null) ...[
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
@@ -346,16 +191,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
-          if (_filterType != "전체") ...[
+          if (provider.filterType != "전체") ...[
             const SizedBox(height: 8),
             TextButton(
-              onPressed: () => _changeFilter("전체"),
+              onPressed: () => provider.changeFilter("전체"),
               child: const Text('전체 목록 보기'),
             ),
           ],
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: _refresh,
+            onPressed: provider.refresh,
             icon: const Icon(Icons.refresh),
             label: const Text('새로고침'),
           ),
@@ -479,7 +324,7 @@ class _CallCardState extends State<CallCard> {
                 ),
               ),
 
-              // 상황 정보 미리보기 추가
+              // 상황 정보 미리보기 추가 - 조건식 그대로 유지
               if (widget.call.info != null && widget.call.info!.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Container(

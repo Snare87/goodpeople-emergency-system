@@ -1,14 +1,10 @@
-// lib/screens/active_mission_screen.dart
+// lib/screens/active_mission_screen.dart - Provider 적용 버전
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:goodpeople_responder/models/call.dart';
+import 'package:provider/provider.dart';
+import 'package:goodpeople_responder/providers/active_mission_provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:goodpeople_responder/services/location_service.dart';
-import 'package:goodpeople_responder/services/call_data_service.dart';
-import 'package:goodpeople_responder/services/background_location_service.dart';
-import 'dart:async';
+import 'package:geolocator/geolocator.dart';
+import 'package:goodpeople_responder/constants/constants.dart';
 
 class ActiveMissionScreen extends StatefulWidget {
   final String callId;
@@ -20,88 +16,36 @@ class ActiveMissionScreen extends StatefulWidget {
 }
 
 class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
-  final db = FirebaseDatabase.instance;
-  Call? missionData;
-  Position? userPosition;
   GoogleMapController? mapController;
-  StreamSubscription? _callSubscription;
-  final CallDataService _callDataService = CallDataService();
+  late ActiveMissionProvider provider;
 
   @override
   void initState() {
     super.initState();
-    _loadMissionData();
-    _getCurrentPosition();
-    _startTracking();
-    // 활성 임무 중에는 30초마다 위치 업데이트
-    BackgroundLocationService().startActiveMissionTracking();
+    // Provider 생성 및 초기화
+    provider = ActiveMissionProvider();
+    provider.initializeMission(widget.callId);
   }
 
   @override
   void dispose() {
-    LocationService().stopTracking();
-    _callSubscription?.cancel();
     mapController = null;
-    // 일반 백그라운드 추적으로 돌아가기 (3분 간격)
-    BackgroundLocationService().startBackgroundTracking();
+    provider.dispose();
     super.dispose();
   }
 
-  void _startTracking() {
-    LocationService().startLocationStream(widget.callId, 'responder_id');
-  }
-
-  void _loadMissionData() {
-    _callSubscription = db
-        .ref("calls/${widget.callId}")
-        .onValue
-        .listen(
-          (event) {
-            if (event.snapshot.exists) {
-              final data = Map<String, dynamic>.from(
-                event.snapshot.value as Map,
-              );
-              setState(() {
-                missionData = Call.fromMap(widget.callId, data);
-              });
-            }
-          },
-          onError: (error) {
-            debugPrint('임무 데이터를 불러오는데 실패했습니다: $error');
-          },
-        );
-  }
-
-  Future<void> _getCurrentPosition() async {
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      final position = await Geolocator.getCurrentPosition();
-      setState(() {
-        userPosition = position;
-      });
-
-      _updateMapCamera();
-    } catch (e) {
-      debugPrint('위치 정보를 가져오는데 실패했습니다: $e');
-    }
-  }
-
   void _updateMapCamera() {
-    if (mapController == null || missionData == null) return;
+    if (mapController == null || provider.missionData == null) return;
 
-    if (userPosition != null) {
-      final midLat = (userPosition!.latitude + missionData!.lat) / 2;
-      final midLng = (userPosition!.longitude + missionData!.lng) / 2;
+    if (provider.userPosition != null) {
+      final midLat = (provider.userPosition!.latitude + provider.missionData!.lat) / 2;
+      final midLng = (provider.userPosition!.longitude + provider.missionData!.lng) / 2;
 
       final distance = Geolocator.distanceBetween(
-        userPosition!.latitude,
-        userPosition!.longitude,
-        missionData!.lat,
-        missionData!.lng,
+        provider.userPosition!.latitude,
+        provider.userPosition!.longitude,
+        provider.missionData!.lat,
+        provider.missionData!.lng,
       );
 
       double zoomLevel = 15.0;
@@ -122,7 +66,7 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
       mapController!.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
-            target: LatLng(missionData!.lat, missionData!.lng),
+            target: LatLng(provider.missionData!.lat, provider.missionData!.lng),
             zoom: 15.0,
           ),
         ),
@@ -153,61 +97,29 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
 
     if (confirm != true) return;
 
+    final success = await provider.completeMission();
+
     if (!mounted) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (context) => const AlertDialog(
-            content: Row(
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 20),
-                Text("임무 완료 처리 중..."),
-              ],
-            ),
-          ),
-    );
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("임무가 완료되었습니다!"),
+          backgroundColor: Colors.green,
+        ),
+      );
 
-    LocationService().stopTracking();
-
-    try {
-      final success = await _callDataService.completeCall(widget.callId);
-
-      if (!mounted) return;
-      Navigator.pop(context);
-
-      if (success) {
+      Future.delayed(const Duration(seconds: 1), () {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("임무가 완료되었습니다!"),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        Future.delayed(const Duration(seconds: 1), () {
-          if (!mounted) return;
-          Navigator.pop(context);
-        });
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("임무 완료 처리 중 오류가 발생했습니다."),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("오류가 발생했습니다: $e")));
+        Navigator.pop(context);
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("임무 완료 처리 중 오류가 발생했습니다."),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -234,256 +146,268 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
 
     if (confirm != true) return;
 
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUserId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("사용자 정보를 찾을 수 없습니다.")));
-      return;
-    }
+    final success = await provider.cancelAcceptance();
 
     if (!mounted) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (context) => const AlertDialog(
-            content: Row(
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 20),
-                Text("수락 취소 처리 중..."),
-              ],
-            ),
-          ),
-    );
-
-    LocationService().stopTracking();
-
-    try {
-      final success = await _callDataService.cancelAcceptance(
-        widget.callId,
-        currentUserId,
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("임무가 취소되었습니다."),
+          backgroundColor: Colors.orange,
+        ),
       );
 
-      if (!mounted) return;
       Navigator.pop(context);
-
-      if (success) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("임무가 취소되었습니다."),
-            backgroundColor: Colors.orange,
-          ),
-        );
-
-        Navigator.pop(context);
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("취소 처리 중 오류가 발생했습니다."),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("오류가 발생했습니다: $e")));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? "취소 처리 중 오류가 발생했습니다."),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('진행 중인 임무'),
-        backgroundColor: Colors.red,
-      ),
-      body:
-          missionData == null
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                children: [
-                  Container(
-                    color: _getMissionStatusColor(missionData!.status),
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 16,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _getMissionStatusIcon(missionData!.status),
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _getMissionStatusText(missionData!.status),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+    return ChangeNotifierProvider.value(
+      value: provider,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('진행 중인 임무'),
+          backgroundColor: Colors.red,
+        ),
+        body: Consumer<ActiveMissionProvider>(
+          builder: (context, provider, child) {
+            if (provider.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-                  SizedBox(
-                    height: 350,
-                    child: GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: LatLng(missionData!.lat, missionData!.lng),
-                        zoom: 15,
+            if (provider.missionData == null) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text(
+                      provider.errorMessage ?? '임무 정보를 불러올 수 없습니다',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final missionData = provider.missionData!;
+
+            return Stack(
+              children: [
+                Column(
+                  children: [
+                    Container(
+                      color: _getMissionStatusColor(missionData.status),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 16,
                       ),
-                      markers: {
-                        Marker(
-                          markerId: const MarkerId('destination'),
-                          position: LatLng(missionData!.lat, missionData!.lng),
-                          infoWindow: InfoWindow(title: missionData!.eventType),
-                          icon: BitmapDescriptor.defaultMarkerWithHue(
-                            BitmapDescriptor.hueRed,
-                          ),
-                        ),
-                        if (userPosition != null)
-                          Marker(
-                            markerId: const MarkerId('user'),
-                            position: LatLng(
-                              userPosition!.latitude,
-                              userPosition!.longitude,
-                            ),
-                            infoWindow: const InfoWindow(title: '내 위치'),
-                            icon: BitmapDescriptor.defaultMarkerWithHue(
-                              BitmapDescriptor.hueBlue,
-                            ),
-                          ),
-                      },
-                      onMapCreated: (controller) {
-                        mapController = controller;
-                        _updateMapCamera();
-                      },
-                      myLocationEnabled: true,
-                      myLocationButtonEnabled: true,
-                    ),
-                  ),
-
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
+                          Icon(
+                            _getMissionStatusIcon(missionData.status),
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            missionData!.eventType,
+                            provider.getMissionStatusText(missionData.status),
                             style: const TextStyle(
-                              fontSize: 24,
+                              color: Colors.white,
                               fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            missionData!.address,
-                            style: TextStyle(
                               fontSize: 16,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          if (missionData!.info != null &&
-                              missionData!.info!.isNotEmpty) ...[
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.red[50],
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.red[200]!),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '상황 정보:',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.red[800],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    missionData!.info!,
-                                    style: TextStyle(color: Colors.red[700]),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-
-                          if (missionData!.acceptedAt != null)
-                            Row(
-                              children: [
-                                const Icon(Icons.timer, color: Colors.grey),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '수락 후 경과 시간: ${_getElapsedTime(missionData!.acceptedAt!)}',
-                                  style: const TextStyle(color: Colors.grey),
-                                ),
-                              ],
-                            ),
-
-                          const SizedBox(height: 24),
-
-                          // 수락 취소 버튼
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton(
-                              onPressed: _cancelAcceptance,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.orange,
-                                side: const BorderSide(color: Colors.orange),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                              ),
-                              child: const Text(
-                                '수락 취소',
-                                style: TextStyle(fontSize: 18),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          // 임무 완료 버튼
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _completeMission,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                              ),
-                              child: const Text(
-                                '임무 완료',
-                                style: TextStyle(fontSize: 18),
-                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
+
+                    SizedBox(
+                      height: 350,
+                      child: GoogleMap(
+                        initialCameraPosition: CameraPosition(
+                          target: LatLng(missionData.lat, missionData.lng),
+                          zoom: 15,
+                        ),
+                        markers: {
+                          Marker(
+                            markerId: const MarkerId('destination'),
+                            position: LatLng(missionData.lat, missionData.lng),
+                            infoWindow: InfoWindow(title: missionData.eventType),
+                            icon: BitmapDescriptor.defaultMarkerWithHue(
+                              BitmapDescriptor.hueRed,
+                            ),
+                          ),
+                          if (provider.userPosition != null)
+                            Marker(
+                              markerId: const MarkerId('user'),
+                              position: LatLng(
+                                provider.userPosition!.latitude,
+                                provider.userPosition!.longitude,
+                              ),
+                              infoWindow: const InfoWindow(title: '내 위치'),
+                              icon: BitmapDescriptor.defaultMarkerWithHue(
+                                BitmapDescriptor.hueBlue,
+                              ),
+                            ),
+                        },
+                        onMapCreated: (controller) {
+                          mapController = controller;
+                          _updateMapCamera();
+                        },
+                        myLocationEnabled: true,
+                        myLocationButtonEnabled: true,
+                      ),
+                    ),
+
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              missionData.eventType,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              missionData.address,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 상황 정보 - 조건식 그대로 유지
+                            if (missionData.info != null &&
+                                missionData.info!.isNotEmpty) ...[
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.red[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.red[200]!),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '상황 정보:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.red[800],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      missionData.info!,
+                                      style: TextStyle(color: Colors.red[700]),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+
+                            // 수락 시간 - 조건식 그대로 유지
+                            if (missionData.acceptedAt != null)
+                              Row(
+                                children: [
+                                  const Icon(Icons.timer, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '수락 후 경과 시간: ${provider.getElapsedTime(missionData.acceptedAt!)}',
+                                    style: const TextStyle(color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+
+                            const SizedBox(height: 24),
+
+                            // 수락 취소 버튼
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: provider.isProcessing ? null : _cancelAcceptance,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.orange,
+                                  side: const BorderSide(color: Colors.orange),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                ),
+                                child: const Text(
+                                  '수락 취소',
+                                  style: TextStyle(fontSize: 18),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // 임무 완료 버튼
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: provider.isProcessing ? null : _completeMission,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                ),
+                                child: const Text(
+                                  '임무 완료',
+                                  style: TextStyle(fontSize: 18),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // 처리 중 오버레이
+                if (provider.isProcessing)
+                  Container(
+                    color: Colors.black54,
+                    child: const Center(
+                      child: Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(width: 20),
+                              Text("처리 중..."),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ],
-              ),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -510,35 +434,6 @@ class _ActiveMissionScreenState extends State<ActiveMissionScreen> {
         return Icons.done_all;
       default:
         return Icons.info;
-    }
-  }
-
-  String _getMissionStatusText(String status) {
-    switch (status) {
-      case 'accepted':
-        return '임무 수락됨';
-      case 'dispatched':
-        return '출동 중';
-      case 'completed':
-        return '임무 완료';
-      default:
-        return '알 수 없음';
-    }
-  }
-
-  String _getElapsedTime(int timestamp) {
-    final diff = DateTime.now().millisecondsSinceEpoch - timestamp;
-    final seconds = diff ~/ 1000;
-
-    final minutes = seconds ~/ 60;
-    final hours = minutes ~/ 60;
-
-    if (hours > 0) {
-      return '$hours시간 ${minutes % 60}분';
-    } else if (minutes > 0) {
-      return '$minutes분 ${seconds % 60}초';
-    } else {
-      return '$seconds초';
     }
   }
 }

@@ -22,11 +22,19 @@ export default function DashboardPage() {
     mapCenter
   } = useDashboard();
 
+  React.useEffect(() => {
+    console.log('DashboardPage mounted, zoom should be 0.9');
+    const mainElement = document.querySelector('main');
+    if (mainElement) {
+      console.log('Current zoom:', window.getComputedStyle(mainElement).zoom);
+    }
+  }, []);
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       <Header title="대시보드" />
 
-      <main className="flex-1 p-4 overflow-hidden" style={{ zoom: 0.9 }}>
+      <main className="flex-1 p-4 overflow-hidden" style={{ zoom: 0.9, border: '2px solid red' }}>
         <DashboardLayout
           // 데이터
           activeCalls={activeCalls}
