@@ -11,8 +11,6 @@ export default function Header({ title = 'GoodPeople' }) {
   const { isLoggedIn, logout } = useAuth();
   
   const isLoginPage = location.pathname === '/';
-  const isDashboard = location.pathname === '/dashboard';
-  const isUserManagement = location.pathname === '/users';
   
   const handleAuth = async () => {
     if (isLoggedIn) {

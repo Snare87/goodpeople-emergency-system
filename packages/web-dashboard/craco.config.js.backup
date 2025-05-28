@@ -1,0 +1,43 @@
+/* craco.config.js - ESLint 없이 실행 */
+module.exports = {
+  // Webpack 설정
+  webpack: {
+    configure: (webpackConfig) => {
+      // ESLint 관련 플러그인 완전 제거
+      webpackConfig.plugins = webpackConfig.plugins.filter(plugin => {
+        if (typeof plugin === 'object' && plugin.constructor) {
+          const name = plugin.constructor.name;
+          // ESLint 관련 플러그인 모두 제거
+          return !name.includes('ESLint') && !name.includes('eslint');
+        }
+        return true;
+      });
+
+      // 모듈 규칙에서도 ESLint 제거
+      webpackConfig.module.rules = webpackConfig.module.rules.filter(rule => {
+        if (rule.use) {
+          return !rule.use.some(use => 
+            typeof use === 'string' && use.includes('eslint')
+          );
+        }
+        return true;
+      });
+
+      return webpackConfig;
+    },
+  },
+  // DevServer 설정
+  devServer: (devServerConfig) => {
+    // Deprecated 옵션 제거
+    delete devServerConfig.onBeforeSetupMiddleware;
+    delete devServerConfig.onAfterSetupMiddleware;
+    
+    // 로깅 최소화
+    devServerConfig.client = {
+      logging: 'error',
+      overlay: false,
+    };
+    
+    return devServerConfig;
+  },
+};

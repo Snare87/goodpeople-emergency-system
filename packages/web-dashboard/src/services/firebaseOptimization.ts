@@ -1,0 +1,111 @@
+// src/services/firebaseOptimization.ts
+import { ref, onValue, goOnline, goOffline, Database, DataSnapshot, get } from 'firebase/database';
+import { db } from '../firebase';
+
+class FirebaseOptimizationService {
+  private database: Database;
+  private reconnectAttempts: number;
+  private maxReconnectAttempts: number;
+  private reconnectDelay: number;
+
+  constructor() {
+    this.database = db;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.reconnectDelay = 1000; // 1초부터 시작
+  }
+
+  // Firebase 연결 최적화 초기화
+  initialize(): void {
+    // 연결 상태 모니터링
+    this.monitorConnection();
+    
+    // 페이지 포커스 이벤트 처리
+    this.handlePageVisibility();
+    
+    console.log('[Firebase] 최적화 서비스 초기화 완료');
+  }
+
+  // 연결 상태 모니터링
+  monitorConnection(): void {
+    const connectedRef = ref(this.database, '.info/connected');
+    
+    onValue(connectedRef, (snapshot: DataSnapshot) => {
+      const connected = snapshot.val() as boolean;
+      console.log(`[Firebase] 연결 상태: ${connected ? '연결됨' : '연결 끊김'}`);
+      
+      if (!connected && this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.attemptReconnection();
+      } else if (connected) {
+        this.reconnectAttempts = 0;
+        this.reconnectDelay = 1000;
+      }
+    });
+  }
+
+  // 재연결 시도
+  async attemptReconnection(): Promise<void> {
+    this.reconnectAttempts++;
+    console.log(`[Firebase] 재연결 시도 ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+    
+    try {
+      await goOffline(this.database);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await goOnline(this.database);
+      
+      // 지수 백오프
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+    } catch (error) {
+      console.error('[Firebase] 재연결 실패:', error);
+      
+      // 재시도
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        setTimeout(() => this.attemptReconnection(), this.reconnectDelay);
+      }
+    }
+  }
+
+  // 페이지 가시성 변경 처리
+  handlePageVisibility(): void {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        console.log('[Firebase] 페이지가 백그라운드로 전환됨');
+        // 백그라운드에서는 연결 유지하지 않음
+        goOffline(this.database);
+      } else {
+        console.log('[Firebase] 페이지가 포그라운드로 전환됨');
+        // 포그라운드로 돌아오면 즉시 연결
+        goOnline(this.database);
+        this.forceSyncData();
+      }
+    });
+  }
+
+  // 강제 동기화
+  async forceSyncData(): Promise<void> {
+    try {
+      console.log('[Firebase] 강제 동기화 시작...');
+      await goOffline(this.database);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await goOnline(this.database);
+      console.log('[Firebase] 강제 동기화 완료');
+    } catch (error) {
+      console.error('[Firebase] 강제 동기화 오류:', error);
+    }
+  }
+
+  // 서버 시간 오프셋 가져오기
+  async getServerTimeOffset(): Promise<number> {
+    try {
+      const offsetRef = ref(this.database, '.info/serverTimeOffset');
+      const offsetSnapshot = await get(offsetRef);
+      return offsetSnapshot.val() || 0;
+    } catch (error) {
+      console.error('[Firebase] 서버 시간 오프셋 조회 실패:', error);
+      return 0;
+    }
+  }
+}
+
+const firebaseOptimizationService = new FirebaseOptimizationService();
+export default firebaseOptimizationService;

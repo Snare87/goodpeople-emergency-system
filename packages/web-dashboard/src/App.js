@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import UserManagementPage from './pages/UserManagementPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+// import firebaseOptimization from './services/firebaseOptimization';
 
 // 로그인 상태에서 로그인 페이지 접근 방지
 function LoginRoute() {
@@ -56,6 +57,11 @@ function AppRouter() {
 
 // 최상위 App 컴포넌트
 function App() {
+  // useEffect(() => {
+  //   // Firebase 최적화 서비스 초기화
+  //   firebaseOptimization.initialize();
+  // }, []);
+  
   return (
     <AuthProvider>
       <BrowserRouter>

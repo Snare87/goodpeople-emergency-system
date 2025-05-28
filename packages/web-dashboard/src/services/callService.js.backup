@@ -6,7 +6,7 @@ import { db, auth } from '../firebase';
 export const subscribeToCalls = (onDataChanged) => {
   const callsRef = ref(db, 'calls');
   
-  const unsubscribe = onValue(callsRef, (snapshot) => {
+  onValue(callsRef, (snapshot) => {
     try {
       const data = snapshot.val() || {};
       const calls = Object.entries(data).map(([id, call]) => ({ id, ...call }));

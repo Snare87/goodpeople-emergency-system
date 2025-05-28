@@ -1,0 +1,23 @@
+// 타입 체크 테스트 파일
+import { CALL_TYPES, CALL_STATUS, CallType, CallStatus } from './constants';
+import { formatTime, formatDate, getElapsedTime } from './utils/formatters';
+
+// 상수 사용 테스트
+console.log('CALL_TYPES:', CALL_TYPES);
+console.log('화재:', CALL_TYPES.FIRE);
+
+// 타입 테스트
+const testCallType: CallType = '화재';
+const testCallStatus: CallStatus = 'idle';
+
+// 함수 사용 테스트
+const now = new Date();
+console.log('현재 시간:', formatTime(now));
+console.log('현재 날짜:', formatDate(now));
+console.log('10분 전:', getElapsedTime(Date.now() - 600000));
+
+// 타입 에러 테스트 (주석 해제하면 에러 발생)
+// const wrongType: CallType = 'wrong'; // 에러!
+// const wrongStatus: CallStatus = 'invalid'; // 에러!
+
+export {};

@@ -10,28 +10,28 @@ const ResponderInfo = ({ responder }) => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    const loadCertifications = async () => {
+      try {
+        setLoading(true);
+        // responder.id는 "resp_userId_timestamp" 형식이므로 userId 추출
+        const userId = responder.id.split('_')[1];
+        
+        const userSnapshot = await get(ref(db, `users/${userId}`));
+        if (userSnapshot.exists()) {
+          const userData = userSnapshot.val();
+          setCertifications(userData.certifications || []);
+        }
+      } catch (error) {
+        console.error('자격증 정보 로드 실패:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
     if (responder?.id) {
       loadCertifications();
     }
   }, [responder?.id]);
-
-  const loadCertifications = async () => {
-    try {
-      setLoading(true);
-      // responder.id는 "resp_userId_timestamp" 형식이므로 userId 추출
-      const userId = responder.id.split('_')[1];
-      
-      const userSnapshot = await get(ref(db, `users/${userId}`));
-      if (userSnapshot.exists()) {
-        const userData = userSnapshot.val();
-        setCertifications(userData.certifications || []);
-      }
-    } catch (error) {
-      console.error('자격증 정보 로드 실패:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (!responder) {
     return (

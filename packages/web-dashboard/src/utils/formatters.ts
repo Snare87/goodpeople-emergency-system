@@ -1,7 +1,7 @@
-// src/utils/formatters.js
+// src/utils/formatters.ts
 
 // 시간 포맷 함수
-export const formatTime = (timestamp) => {
+export const formatTime = (timestamp: string | number | Date | null | undefined): string => {
   if (!timestamp) return '';
   try {
     const date = new Date(timestamp);
@@ -16,7 +16,7 @@ export const formatTime = (timestamp) => {
 };
 
 // 날짜 포맷 함수
-export const formatDate = (timestamp) => {
+export const formatDate = (timestamp: string | number | Date | null | undefined): string => {
   if (!timestamp) return '';
   try {
     const date = new Date(timestamp);
@@ -31,10 +31,9 @@ export const formatDate = (timestamp) => {
 };
 
 // 날짜와 시간을 함께 표시하는 함수
-export const formatDateTime = (timestamp) => {
+export const formatDateTime = (timestamp: string | number | Date | null | undefined): string => {
   if (!timestamp) return '';
   try {
-    const date = new Date(timestamp);
     return `${formatDate(timestamp)} ${formatTime(timestamp)}`;
   } catch (e) {
     return '';
@@ -42,16 +41,19 @@ export const formatDateTime = (timestamp) => {
 };
 
 // 상세 경과 시간 계산 함수
-export const getDetailedElapsedTime = (start, end) => {
+export const getDetailedElapsedTime = (
+  start: string | number | Date | null | undefined, 
+  end: string | number | Date | null | undefined
+): string => {
   if (!start || !end) return '';
   
   try {
     const startTime = typeof start === 'string' ? new Date(start).getTime() : start;
     const endTime = typeof end === 'string' ? new Date(end).getTime() : end;
     
-    if (isNaN(startTime) || isNaN(endTime)) return '';
+    if (isNaN(startTime as number) || isNaN(endTime as number)) return '';
     
-    const diff = Math.max(0, Math.floor((endTime - startTime) / 1000));
+    const diff = Math.max(0, Math.floor(((endTime as number) - (startTime as number)) / 1000));
     
     const hours = Math.floor(diff / 3600);
     const minutes = Math.floor((diff % 3600) / 60);
@@ -69,21 +71,24 @@ export const getDetailedElapsedTime = (start, end) => {
 };
 
 // 경과 시간 계산 함수 (현재 시간 기준)
-export const getElapsedTime = (startAt, currentTime = Date.now()) => {
+export const getElapsedTime = (
+  startAt: string | number | Date | null | undefined, 
+  currentTime: number = Date.now()
+): string => {
   if (!startAt) return '';
   
   try {
     const startTimestamp = typeof startAt === 'string' ? new Date(startAt).getTime() : startAt;
     
-    if (isNaN(startTimestamp)) return '';
+    if (isNaN(startTimestamp as number)) return '';
     
-    const diff = Math.max(0, Math.floor((currentTime - startTimestamp) / 1000));
+    const diff = Math.max(0, Math.floor((currentTime - (startTimestamp as number)) / 1000));
     
     if (diff < 60) return `${diff}초 전`;
     if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}시간 ${Math.floor((diff % 3600) / 60)}분 전`;
     
-    const date = new Date(startTimestamp);
+    const date = new Date(startTimestamp as number);
     return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
   } catch (e) {
     return '';
