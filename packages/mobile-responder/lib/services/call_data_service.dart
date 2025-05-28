@@ -142,9 +142,16 @@ class CallDataService {
                 availableCalls.add(call);
               }
             } else {
-              debugPrint(
-                '[CallDataService] ❌ call $key 최종 필터 미통과. (status: $status, hasResponder: $hasResponder, isCompleted: ${status == 'completed'}) - ${call.eventType} ${call.address}',
-              );
+              // 수락된 재난이나 완료된 재난은 표시하지 않음
+              if (status == 'accepted' && hasResponder) {
+                debugPrint(
+                  '[CallDataService] ❌ call $key 이미 수락됨 - 수락자: ${call.responder?.name}',
+                );
+              } else {
+                debugPrint(
+                  '[CallDataService] ❌ call $key 최종 필터 미통과. (status: $status, hasResponder: $hasResponder, isCompleted: ${status == 'completed'}) - ${call.eventType} ${call.address}',
+                );
+              }
             }
           } catch (e, stackTrace) {
             debugPrint('[CallDataService] 항목 ($key) 처리 중 오류 발생: $e');

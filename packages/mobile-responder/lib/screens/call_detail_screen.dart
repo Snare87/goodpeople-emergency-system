@@ -136,7 +136,48 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         throw Exception('로그인 정보를 찾을 수 없습니다.');
       }
 
-      // 1. 먼저 활성 임무가 있는지 확인
+      // 1. 먼저 해당 재난의 최신 상태 확인 (중복 수락 방지)
+      final currentCallSnapshot = await db.ref("calls/${widget.callId}").get();
+      if (!currentCallSnapshot.exists) {
+        throw Exception('재난 정보를 찾을 수 없습니다.');
+      }
+      
+      final currentCallData = Map<String, dynamic>.from(currentCallSnapshot.value as Map);
+      
+      // 이미 다른 대원이 수락했는지 확인
+      if (currentCallData['status'] == 'accepted' && currentCallData['responder'] != null) {
+        if (mounted) {
+          setState(() {
+            accepting = false;
+          });
+          
+          // 다른 대원 정보 가져오기
+          final responderInfo = Map<String, dynamic>.from(currentCallData['responder']);
+          final responderName = responderInfo['name'] ?? '다른 대원';
+          
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: const Text('⚠️ 이미 수락된 재난'),
+                content: Text('$responderName님이 이미 이 재난을 수락했습니다.'),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop(); // 상세 화면도 닫기
+                    },
+                    child: const Text('확인'),
+                  ),
+                ],
+              );
+            },
+          );
+          return;
+        }
+      }
+
+      // 2. 활성 임무가 있는지 확인
       final hasActive = await CallDataService().hasActiveMission(
         currentUser.uid,
       );
@@ -155,7 +196,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         }
       }
 
-      // 2. 사용자 정보 가져오기
+      // 3. 사용자 정보 가져오기
       final userSnapshot =
           await FirebaseDatabase.instance.ref('users/${currentUser.uid}').get();
 
@@ -170,23 +211,66 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         userRank = userData['rank'] ?? "소방사"; // rank 정보 가져오기
       }
 
-      // 3. 일반적인 수락 처리
+      // 4. 트랜잭션 방식으로 수락 처리
       final responderRef = db.ref("calls/${widget.callId}");
-
-      await responderRef.update({
-        "status": "accepted",
-        "acceptedAt": DateTime.now().millisecondsSinceEpoch,
-        "responder": {
-          "id":
-              "resp_${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}",
+      
+      // 조건부 업데이트 - status가 'dispatched'이고 responder가 null일 때만 수락
+      final TransactionResult result = await responderRef.runTransaction((Object? currentData) {
+        if (currentData == null) {
+          return Transaction.abort();
+        }
+        
+        Map<String, dynamic> callData = Map<String, dynamic>.from(currentData as Map);
+        
+        // 이미 수락된 경우 트랜잭션 취소
+        if (callData['status'] == 'accepted' || callData['responder'] != null) {
+          return Transaction.abort();
+        }
+        
+        // 수락 처리
+        callData['status'] = 'accepted';
+        callData['acceptedAt'] = DateTime.now().millisecondsSinceEpoch;
+        callData['responder'] = {
+          "id": "resp_${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}",
           "name": userName,
-          "position": userPositionName, // 변수명 변경
-          "rank": userRank, // rank 추가
-          "lat": userPosition?.latitude, // Position 타입의 latitude
-          "lng": userPosition?.longitude, // Position 타입의 longitude
+          "position": userPositionName,
+          "rank": userRank,
+          "lat": userPosition?.latitude,
+          "lng": userPosition?.longitude,
           "updatedAt": DateTime.now().millisecondsSinceEpoch,
-        },
+        };
+        
+        return Transaction.success(callData);
       });
+
+      if (!result.committed) {
+        // 트랜잭션 실패 - 다른 대원이 먼저 수락
+        if (mounted) {
+          setState(() {
+            accepting = false;
+          });
+          
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: const Text('⚠️ 수락 실패'),
+                content: const Text('다른 대원이 이미 이 재난을 수락했습니다.'),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop(); // 상세 화면도 닫기
+                    },
+                    child: const Text('확인'),
+                  ),
+                ],
+              );
+            },
+          );
+          return;
+        }
+      }
 
       if (mounted) {
         setState(() {

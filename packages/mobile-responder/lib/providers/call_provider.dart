@@ -78,7 +78,11 @@ class CallProvider extends ChangeNotifier {
       (calls) {
         _allCalls = calls;
         _isLoading = false;
+        
+        // 즉시 업데이트를 위해 먼저 notifyListeners 호출
         notifyListeners();
+        
+        // 필터링 적용
         _applyCurrentFilter();
       },
       onError: (error) {

@@ -139,6 +139,10 @@ class _HomeScreenState extends State<HomeScreen> {
               currentPosition: provider.currentPosition,
               onTap: () => _navigateToDetail(call),
               hasActiveMission: false,
+              onAcceptStateChanged: () {
+                // 수락 상태가 변경되면 즉시 새로고침
+                provider.refresh();
+              },
             );
           },
         ),
@@ -232,6 +236,7 @@ class CallCard extends StatefulWidget {
   final Position? currentPosition;
   final VoidCallback onTap;
   final bool hasActiveMission;
+  final VoidCallback? onAcceptStateChanged;
 
   const CallCard({
     super.key,
@@ -239,6 +244,7 @@ class CallCard extends StatefulWidget {
     this.currentPosition,
     required this.onTap,
     this.hasActiveMission = false,
+    this.onAcceptStateChanged,
   });
 
   @override
