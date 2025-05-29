@@ -25,6 +25,7 @@ interface User {
   roles: string[];
   position?: string;
   rank?: string;
+  certifications?: string[];
 }
 
 export default function UserManagementPage() {
@@ -81,6 +82,24 @@ export default function UserManagementPage() {
       <Header title="대원 관리" />
       
       <main className="p-6 space-y-6">
+        {/* 자격증 필터 알림 */}
+        {filter.startsWith('cert_') && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-sm text-blue-800">
+              🎓 현재{
+                filter === 'cert_all' ? ' 자격증을 하나 이상 보유한' :
+                filter === 'cert_emergency_1' ? ' 응급구조사 1급' :
+                filter === 'cert_emergency_2' ? ' 응급구조사 2급' :
+                filter === 'cert_nurse' ? ' 간호사' :
+                filter === 'cert_rescue_1' ? ' 인명구조사 1급' :
+                filter === 'cert_rescue_2' ? ' 인명구조사 2급' :
+                filter === 'cert_fire_1' ? ' 화재대응능력 1급' :
+                filter === 'cert_fire_2' ? ' 화재대응능력 2급' : ''
+              } 자격증을 보유한 대원들만 표시하고 있습니다.
+            </p>
+          </div>
+        )}
+        
         {/* 사용자 목록 */}
         <Card>
           <UserFilters 

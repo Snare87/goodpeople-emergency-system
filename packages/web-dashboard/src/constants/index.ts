@@ -4,6 +4,7 @@
 export * from './callTypes';
 export * from './userRoles';
 export * from './badgeVariants';
+export * from './certifications';
 
 // 공통으로 사용되는 상수들
 export const APP_NAME = 'GoodPeople' as const;

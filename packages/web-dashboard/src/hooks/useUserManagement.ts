@@ -16,11 +16,17 @@ interface User {
   roles: string[];
   position?: string;
   rank?: string;
+  department?: string;
+  officialId?: string;
+  employeeId?: string;
+  certifications?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
 
-type FilterType = 'all' | 'web_users' | 'app_users' | 'pending' | 'approved' | 'rejected';
+type FilterType = 'all' | 'web_users' | 'app_users' | 'pending' | 'approved' | 'rejected' | 
+  'cert_all' | 'cert_emergency_1' | 'cert_emergency_2' | 'cert_nurse' | 
+  'cert_rescue_1' | 'cert_rescue_2' | 'cert_fire_1' | 'cert_fire_2';
 
 interface UpdateResult {
   success: boolean;
@@ -50,7 +56,8 @@ export const useUserManagement = (): UseUserManagementReturn => {
         id,
         ...user,
         permissions: user.permissions || { app: true, web: false },
-        roles: user.roles || []
+        roles: user.roles || [],
+        certifications: user.certifications || []
       }));
       setUsers(usersList);
       setLoading(false);
@@ -65,6 +72,34 @@ export const useUserManagement = (): UseUserManagementReturn => {
       if (filter === 'all') return true;
       if (filter === 'web_users') return user.permissions?.web === true;
       if (filter === 'app_users') return user.permissions?.app === true;
+      
+      // 자격증 필터
+      if (filter === 'cert_all') {
+        return user.certifications && user.certifications.length > 0;
+      }
+      if (filter === 'cert_emergency_1') {
+        return user.certifications?.includes('응급구조사 1급');
+      }
+      if (filter === 'cert_emergency_2') {
+        return user.certifications?.includes('응급구조사 2급');
+      }
+      if (filter === 'cert_nurse') {
+        return user.certifications?.includes('간호사');
+      }
+      if (filter === 'cert_rescue_1') {
+        return user.certifications?.includes('인명구조사 1급');
+      }
+      if (filter === 'cert_rescue_2') {
+        return user.certifications?.includes('인명구조사 2급');
+      }
+      if (filter === 'cert_fire_1') {
+        return user.certifications?.includes('화재대응능력 1급');
+      }
+      if (filter === 'cert_fire_2') {
+        return user.certifications?.includes('화재대응능력 2급');
+      }
+      
+      // 상태 필터
       return user.status === filter;
     });
   }, [users, filter]);

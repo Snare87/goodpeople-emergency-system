@@ -1,7 +1,7 @@
 // src/components/users/UserTable.tsx
 import React from 'react';
 import Badge from '../common/Badge';
-import { USER_STATUS_LABELS, STATUS_BADGE_VARIANTS, POSITION_BADGE_VARIANTS, RANK_COLORS, UserStatus, BadgeVariant } from '../../constants';
+import { USER_STATUS_LABELS, STATUS_BADGE_VARIANTS, POSITION_BADGE_VARIANTS, RANK_COLORS, UserStatus, BadgeVariant, getCertificationVariant } from '../../constants';
 import UserActions from './UserActions';
 
 interface User {
@@ -20,6 +20,7 @@ interface User {
   officialId?: string;
   employeeId?: string;
   createdAt?: string;
+  certifications?: string[];
 }
 
 interface UserTableProps {
@@ -88,6 +89,9 @@ const UserTable: React.FC<UserTableProps> = ({ users, onStatusUpdate, onPermissi
               소속/계급/직책
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              자격증
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               접근 권한
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -122,6 +126,23 @@ const UserTable: React.FC<UserTableProps> = ({ users, onStatusUpdate, onPermissi
                       {user.position}
                     </Badge>
                   </div>
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                <div className="flex flex-wrap gap-1 max-w-xs">
+                  {user.certifications && user.certifications.length > 0 ? (
+                    user.certifications.map((cert, index) => (
+                      <Badge 
+                        key={index} 
+                        variant={getCertificationVariant(cert) as BadgeVariant} 
+                        size="sm"
+                      >
+                        {cert}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm text-gray-400">-</span>
+                  )}
                 </div>
               </td>
               <td className="px-6 py-4">
