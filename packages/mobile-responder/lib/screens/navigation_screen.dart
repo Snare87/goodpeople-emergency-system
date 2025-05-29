@@ -8,6 +8,7 @@ import 'package:goodpeople_responder/models/call.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:goodpeople_responder/screens/active_mission_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String callId;
@@ -225,14 +226,19 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop(); // 네비게이션 종료
+              Navigator.of(context).pop(); // 다이얼로그 닫기
+              _endNavigation();
             },
             child: const Text('확인'),
           ),
         ],
       ),
     );
+  }
+
+  void _endNavigation() {
+    // 네비게이션 종료 시 단순히 pop하여 이전 화면(ActiveMissionScreen)으로 돌아가기
+    Navigator.pop(context);
   }
 
   @override
@@ -460,7 +466,7 @@ class _NavigationScreenState extends State<NavigationScreen> with TickerProvider
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () {
-                            Navigator.pop(context);
+                            _endNavigation();
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,

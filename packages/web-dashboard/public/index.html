@@ -39,18 +39,6 @@
       To begin the development, run `npm start` or `yarn start`.
       To create a production bundle, use `npm run build` or `yarn build`.
     -->
-    <!-- Google Maps JavaScript API -->
-    <script>
-      function initMap() {
-        // Google Maps API가 로드되었을 때 실행될 콜백
-        window.googleMapsLoaded = true;
-        window.dispatchEvent(new Event('googleMapsLoaded'));
-      }
-    </script>
-    <script
-      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAuTv114xfrpTOypJ0Qt5wehvo-AknUraM&callback=initMap&language=ko"
-      async
-      defer
-    ></script>
+    <!-- Google Maps JavaScript API는 App.tsx에서 동적으로 로드됩니다 -->
   </body>
 </html>

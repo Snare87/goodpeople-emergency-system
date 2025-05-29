@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase 사용자 권한 설정</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #4285f4;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #357ae8;
+        }
+        .success {
+            color: green;
+            margin-top: 10px;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Firebase 사용자 권한 설정</h1>
+    
+    <div class="info">
+        <h3>사용 방법:</h3>
+        <ol>
+            <li>Firebase Console에서 admin@korea.kr의 UID를 복사하세요</li>
+            <li>아래 양식에 UID를 입력하세요</li>
+            <li>"권한 설정" 버튼을 클릭하세요</li>
+        </ol>
+    </div>
+
+    <div class="container">
+        <h2>관리자 권한 설정</h2>
+        <div>
+            <label>사용자 UID:</label><br>
+            <input type="text" id="uid" placeholder="Firebase UID 입력" style="width: 400px;">
+        </div>
+        <div>
+            <label>이메일:</label><br>
+            <input type="email" id="email" value="admin@korea.kr" style="width: 400px;">
+        </div>
+        <div>
+            <label>이름:</label><br>
+            <input type="text" id="name" value="관리자" style="width: 400px;">
+        </div>
+        <button onclick="setAdminPermissions()">권한 설정</button>
+        <div id="result"></div>
+    </div>
+
+    <div class="container">
+        <h2>현재 사용자 목록</h2>
+        <button onclick="listUsers()">사용자 목록 조회</button>
+        <div id="userList"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+        // Firebase 설정
+        const firebaseConfig = {
+            apiKey: "AIzaSyDHPRlIqqYH25PyjMOAIe6BBzywEOo5a3w",
+            authDomain: "goodpeople-95f54.firebaseapp.com",
+            databaseURL: "https://goodpeople-95f54-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "goodpeople-95f54",
+            storageBucket: "goodpeople-95f54.appspot.com",
+            messagingSenderId: "24321943098",
+            appId: "1:24321943098:web:dummy"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+
+        window.setAdminPermissions = async function() {
+            const uid = document.getElementById('uid').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const name = document.getElementById('name').value.trim();
+            const resultDiv = document.getElementById('result');
+
+            if (!uid) {
+                resultDiv.innerHTML = '<p class="error">UID를 입력해주세요!</p>';
+                return;
+            }
+
+            try {
+                // 관리자 권한 데이터
+                const adminData = {
+                    email: email,
+                    name: name,
+                    status: "approved",
+                    permissions: {
+                        web: true,
+                        app: true
+                    },
+                    roles: ["admin", "dispatcher"],
+                    position: "관리자",
+                    rank: "소방령",
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+
+                // 데이터 저장
+                await set(ref(db, `users/${uid}`), adminData);
+                
+                resultDiv.innerHTML = `
+                    <p class="success">✅ 권한 설정 완료!</p>
+                    <p>이제 ${email} 계정으로 로그인할 수 있습니다.</p>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ 오류: ${error.message}</p>`;
+                console.error(error);
+            }
+        };
+
+        window.listUsers = async function() {
+            const userListDiv = document.getElementById('userList');
+            
+            try {
+                const snapshot = await get(ref(db, 'users'));
+                
+                if (snapshot.exists()) {
+                    const users = snapshot.val();
+                    let html = '<h3>등록된 사용자:</h3><ul>';
+                    
+                    for (const [uid, user] of Object.entries(users)) {
+                        html += `
+                            <li>
+                                <strong>${user.name}</strong> (${user.email})
+                                <br>UID: ${uid}
+                                <br>상태: ${user.status}
+                                <br>웹 권한: ${user.permissions?.web ? '✅' : '❌'}
+                                <br>역할: ${user.roles?.join(', ') || '없음'}
+                            </li><br>
+                        `;
+                    }
+                    
+                    html += '</ul>';
+                    userListDiv.innerHTML = html;
+                } else {
+                    userListDiv.innerHTML = '<p>등록된 사용자가 없습니다.</p>';
+                }
+            } catch (error) {
+                userListDiv.innerHTML = `<p class="error">오류: ${error.message}</p>`;
+                console.error(error);
+            }
+        };
+    </script>
+</body>
+</html>

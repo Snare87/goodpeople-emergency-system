@@ -8,7 +8,7 @@ import MapLegend from './MapLegend';
 // Google Maps 타입 정의 확장
 declare global {
   interface Window {
-    google: {
+    google?: {
       maps: {
         Map: any;
         LatLng: any;
@@ -29,6 +29,7 @@ declare global {
       };
     };
     googleMapsLoaded?: boolean;
+    initMap?: () => void;
   }
 }
 
@@ -94,6 +95,20 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
     console.log('[GoogleMap] Accepted calls with responders:', acceptedCalls.length);
     const responderListeners: { [key: string]: () => void } = {};
 
+    // 현재 responders에서 더 이상 accepted 상태가 아닌 호출 제거
+    setResponders(prev => {
+      const newMap = new Map(prev);
+      // 완료되었거나 취소된 호출의 대원 마커 제거
+      Array.from(newMap.keys()).forEach(callId => {
+        const call = calls.find(c => c.id === callId);
+        if (!call || call.status !== 'accepted') {
+          console.log('[GoogleMap] Removing responder for call:', callId, 'status:', call?.status);
+          newMap.delete(callId);
+        }
+      });
+      return newMap;
+    });
+
     acceptedCalls.forEach(call => {
       if (call.responder?.id && call.location) {
         const responderRef = ref(db, `calls/${call.id}/responder`);
@@ -139,6 +154,12 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
 
     // 대원별 마커 및 경로 생성
     responders.forEach((responder, callId) => {
+      // 해당 호출이 여전히 accepted 상태인지 확인
+      const call = calls.find(c => c.id === callId);
+      if (!call || call.status !== 'accepted') {
+        console.log('[GoogleMap] Skipping responder marker for non-accepted call:', callId);
+        return;
+      }
       // 대원 위치 마커
       const responderMarker = new maps.Marker({
         position: new maps.LatLng(responder.lat, responder.lng),

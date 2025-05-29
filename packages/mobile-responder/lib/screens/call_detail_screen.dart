@@ -429,7 +429,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         // 화면 이동
         if (useNavigation == true) {
           // 네비게이션 화면으로 바로 이동
-          Navigator.pushReplacement(
+          Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => NavigationScreen(
@@ -448,7 +448,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
           );
         } else {
           // 기존 임무 화면으로 이동
-          Navigator.pushReplacement(
+          Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => ActiveMissionScreen(callId: widget.callId),
@@ -529,7 +529,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
               ElevatedButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  Navigator.pushReplacement(
+                  Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder:

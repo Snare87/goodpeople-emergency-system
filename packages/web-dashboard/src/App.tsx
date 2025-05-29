@@ -1,12 +1,13 @@
 // src/App.tsx - 권한 기반 라우팅 개선
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import UserManagementPage from './pages/UserManagementPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import { loadGoogleMaps } from './utils/loadGoogleMaps';
 // import firebaseOptimization from './services/firebaseOptimization';
 
 // 로그인 상태에서 로그인 페이지 접근 방지
@@ -57,10 +58,15 @@ function AppRouter() {
 
 // 최상위 App 컴포넌트
 function App() {
-  // useEffect(() => {
-  //   // Firebase 최적화 서비스 초기화
-  //   firebaseOptimization.initialize();
-  // }, []);
+  useEffect(() => {
+    // Google Maps API 동적 로드
+    loadGoogleMaps().catch(error => {
+      console.error('Failed to load Google Maps:', error);
+    });
+    
+    // Firebase 최적화 서비스 초기화
+    // firebaseOptimization.initialize();
+  }, []);
   
   return (
     <AuthProvider>
