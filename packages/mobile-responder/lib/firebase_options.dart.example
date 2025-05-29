@@ -1,0 +1,64 @@
+// ⚠️ 이 파일은 예제입니다. 실제 파일은 FlutterFire CLI로 생성하세요.
+// 
+// 🔧 생성 방법:
+// 1. Firebase Console에서 Flutter 앱 추가
+// 2. 터미널에서 실행:
+//    dart pub global activate flutterfire_cli
+//    flutterfire configure
+// 
+// 3. 생성된 firebase_options.dart는 .gitignore에 의해 자동으로 무시됩니다
+//
+// 📚 참고: https://firebase.google.com/docs/flutter/setup
+
+import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
+/// FlutterFire CLI로 자동 생성되는 설정 파일
+/// 
+/// 사용 예시:
+/// ```dart
+/// import 'firebase_options.dart';
+/// 
+/// await Firebase.initializeApp(
+///   options: DefaultFirebaseOptions.currentPlatform,
+/// );
+/// ```
+class DefaultFirebaseOptions {
+  static FirebaseOptions get currentPlatform {
+    if (kIsWeb) {
+      throw UnsupportedError(
+        'Web 플랫폼 설정이 필요합니다. flutterfire configure를 실행하세요.',
+      );
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return android;
+      case TargetPlatform.iOS:
+        return ios;
+      default:
+        throw UnsupportedError(
+          '지원하지 않는 플랫폼입니다.',
+        );
+    }
+  }
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'YOUR-ANDROID-API-KEY',
+    appId: 'YOUR-ANDROID-APP-ID',
+    messagingSenderId: 'YOUR-SENDER-ID',
+    projectId: 'YOUR-PROJECT-ID',
+    databaseURL: 'YOUR-DATABASE-URL',
+    storageBucket: 'YOUR-STORAGE-BUCKET',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'YOUR-IOS-API-KEY',
+    appId: 'YOUR-IOS-APP-ID',
+    messagingSenderId: 'YOUR-SENDER-ID',
+    projectId: 'YOUR-PROJECT-ID',
+    databaseURL: 'YOUR-DATABASE-URL',
+    storageBucket: 'YOUR-STORAGE-BUCKET',
+    iosBundleId: 'com.example.goodpeople-responder',
+  );
+}
