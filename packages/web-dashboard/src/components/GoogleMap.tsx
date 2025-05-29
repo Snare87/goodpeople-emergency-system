@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Call } from '../services/callService';
 import { db } from '../firebase';
 import { ref, onValue, off } from 'firebase/database';
+import MapLegend from './MapLegend';
 
 // Google Maps 타입 정의 확장
 declare global {
@@ -233,11 +234,24 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
 
       const isSelected = call.id === selectedCallId;
       const isAccepted = call.status === 'accepted';
+      const isCompleted = call.status === 'completed';
       
-      // 마커 색상 결정
-      let markerColor = '#F44336'; // 기본: 빨간색
-      if (isAccepted) markerColor = '#4CAF50'; // 수락됨: 초록색
-      if (isSelected) markerColor = '#FF9800'; // 선택됨: 주황색
+      // 마커 색상 결정 (우선순위: 완료 > 수락 > 선택 > 기본)
+      let markerColor = '#F44336'; // 기본: 빨간색 (idle, dispatched)
+      let strokeColor = 'white';
+      let strokeWeight = 2;
+      
+      if (isCompleted) {
+        markerColor = '#9E9E9E'; // 완료: 회색
+      } else if (isAccepted) {
+        markerColor = '#4CAF50'; // 수락됨: 초록색
+        if (isSelected) {
+          strokeColor = '#FF9800'; // 선택된 수락: 주황색 테두리
+          strokeWeight = 4;
+        }
+      } else if (isSelected) {
+        markerColor = '#FF9800'; // 선택됨: 주황색
+      }
 
       const marker = new maps.Marker({
         position: new maps.LatLng(call.location.lat, call.location.lng),
@@ -248,8 +262,8 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
           scale: isSelected ? 12 : 10,
           fillColor: markerColor,
           fillOpacity: 0.9,
-          strokeColor: 'white',
-          strokeWeight: 2,
+          strokeColor: strokeColor,
+          strokeWeight: strokeWeight,
           anchor: new maps.Point(0, 0),
         },
         zIndex: isSelected ? 999 : (isAccepted ? 500 : 100),
@@ -262,12 +276,16 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
             🚨 ${call.eventType}
           </h3>
           <p style="margin: 5px 0;"><strong>주소:</strong> ${call.address}</p>
-          <p style="margin: 5px 0;"><strong>상태:</strong> ${
-            call.status === 'idle' ? '대기중' :
-            call.status === 'dispatched' ? '출동요청' :
-            call.status === 'accepted' ? '출동중' :
-            call.status === 'completed' ? '완료' : call.status
-          }</p>
+          <p style="margin: 5px 0;"><strong>상태:</strong> 
+            <span style="color: ${markerColor}; font-weight: bold;">
+              ${
+                call.status === 'idle' ? '⚠️ 대기중' :
+                call.status === 'dispatched' ? '📢 출동요청' :
+                call.status === 'accepted' ? '🚑 출동중' :
+                call.status === 'completed' ? '✅ 완료' : call.status
+              }
+            </span>
+          </p>
       `;
 
       if (call.info) {
@@ -354,15 +372,18 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
   }
 
   return (
-    <div
-      ref={mapRef}
-      style={{ 
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%', 
-        height: '100%'
-      }}
-    />
+    <>
+      <div
+        ref={mapRef}
+        style={{ 
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%', 
+          height: '100%'
+        }}
+      />
+      <MapLegend />
+    </>
   );
 }
