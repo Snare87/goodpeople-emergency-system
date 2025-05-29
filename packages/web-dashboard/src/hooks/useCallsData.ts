@@ -18,11 +18,12 @@ export default function useCallsData(): UseCallsDataReturn {
   // 데이터베이스 리스너 설정
   useEffect(() => {
     const unsubscribe = subscribeToCalls((calls) => {
+      console.log('[useCallsData] Received calls from Firebase:', calls);
       setAllCalls(calls);
     });
     
     return unsubscribe;
-  }, []);
+  }, []); 
   
   // 활성 재난과 완료된 재난 분류
   const activeCalls = useMemo(() => {

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase 연결 테스트</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔥 Firebase 연결 테스트</h1>
+    <div id="status"></div>
+    <div id="data"></div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const dataDiv = document.getElementById('data');
+
+        // Firebase 설정
+        const firebaseConfig = {
+            apiKey: "AIzaSyDHPRlIqqYH25PyjMOAIe6BBzywEOo5a3w",
+            authDomain: "goodpeople-95f54.firebaseapp.com",
+            databaseURL: "https://goodpeople-95f54-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "goodpeople-95f54",
+            storageBucket: "goodpeople-95f54.firebasestorage.app",
+            messagingSenderId: "24321943098",
+            appId: "1:24321943098:web:your_web_app_id"
+        };
+
+        try {
+            // Firebase 초기화
+            firebase.initializeApp(firebaseConfig);
+            statusDiv.innerHTML = '<div class="status success">✅ Firebase 초기화 성공!</div>';
+
+            // Database 참조
+            const db = firebase.database();
+            
+            // 재난 데이터 가져오기
+            db.ref('calls').once('value').then(snapshot => {
+                const data = snapshot.val();
+                
+                if (data) {
+                    const calls = Object.entries(data).map(([id, call]) => ({
+                        id,
+                        ...call
+                    }));
+                    
+                    statusDiv.innerHTML += '<div class="status success">✅ 재난 데이터 로드 성공! (' + calls.length + '개)</div>';
+                    
+                    // 데이터 표시
+                    dataDiv.innerHTML = '<h2>📋 재난 목록</h2>';
+                    calls.forEach(call => {
+                        const hasLocation = call.lat && call.lng;
+                        const hasResponder = call.responder ? '있음' : '없음';
+                        
+                        dataDiv.innerHTML += `
+                            <div class="status info">
+                                <strong>🚨 ${call.eventType || '정보없음'}</strong><br>
+                                ID: ${call.id}<br>
+                                주소: ${call.address || '정보없음'}<br>
+                                위치: ${hasLocation ? `위도 ${call.lat}, 경도 ${call.lng}` : '❌ 위치 정보 없음'}<br>
+                                상태: ${call.status || '정보없음'}<br>
+                                대원: ${hasResponder}
+                                ${call.responder ? `<br>- ${call.responder.name} (${call.responder.position})` : ''}
+                            </div>
+                        `;
+                    });
+                    
+                    // 위치 정보가 없는 재난 확인
+                    const noLocationCalls = calls.filter(call => !call.lat || !call.lng);
+                    if (noLocationCalls.length > 0) {
+                        dataDiv.innerHTML += `<div class="status error">⚠️ 위치 정보가 없는 재난: ${noLocationCalls.length}개</div>`;
+                    }
+                    
+                } else {
+                    statusDiv.innerHTML += '<div class="status error">❌ 재난 데이터가 없습니다.</div>';
+                }
+            }).catch(error => {
+                statusDiv.innerHTML += '<div class="status error">❌ 데이터 로드 실패: ' + error.message + '</div>';
+            });
+            
+        } catch (error) {
+            statusDiv.innerHTML = '<div class="status error">❌ Firebase 초기화 실패: ' + error.message + '</div>';
+        }
+    </script>
+</body>
+</html>

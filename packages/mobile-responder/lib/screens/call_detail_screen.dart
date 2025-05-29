@@ -4,9 +4,12 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:goodpeople_responder/services/call_data_service.dart';
+import 'package:goodpeople_responder/services/directions_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'active_mission_screen.dart';
+import 'package:goodpeople_responder/screens/navigation_screen.dart';
 import 'dart:async';
+import 'package:goodpeople_responder/models/call.dart';
 
 class CallDetailScreen extends StatefulWidget {
   final String callId;
@@ -30,21 +33,25 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
   bool accepting = false;
   final db = FirebaseDatabase.instance;
   Map<String, dynamic>? callDetails;
-  Position? userPosition; // 클래스 멤버 변수로 이미 선언됨
+  Position? userPosition;
   double? distanceToSite;
   GoogleMapController? mapController;
   Timer? _timeUpdateTimer;
   DateTime _currentTime = DateTime.now();
   StreamSubscription? _callListener;
+  
+  // 경로 관련 변수
+  DirectionsResult? _directionsResult;
+  Set<Polyline> _polylines = {};
+  bool _showRoutePreview = false;
 
   @override
   void initState() {
     super.initState();
     _loadCallDetails();
     _getCurrentPosition();
-    _listenToCallChanges(); // 실시간 변경 감지 추가
+    _listenToCallChanges();
 
-    // 60초마다 현재 시간 업데이트
     _timeUpdateTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
       if (mounted) {
         setState(() {
@@ -54,7 +61,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
     });
   }
 
-  // 경과 시간 계산 함수
   String _getElapsedTime(int? timestamp) {
     if (timestamp == null) return '';
 
@@ -72,7 +78,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
     }
   }
 
-  // 재난 상세정보 불러오기
   Future<void> _loadCallDetails() async {
     try {
       final snapshot = await db.ref("calls/${widget.callId}").get();
@@ -86,7 +91,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
     }
   }
   
-  // 재난 상태 변경 실시간 감지
   void _listenToCallChanges() {
     _callListener = db.ref("calls/${widget.callId}").onValue.listen((event) {
       if (event.snapshot.exists && mounted) {
@@ -98,11 +102,9 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
           callDetails = newData;
         });
         
-        // 호출이 취소되었을 때 알림
         if (oldStatus == 'dispatched' && newStatus == 'idle') {
           _showStatusChangeDialog('호출 취소', '이 재난의 호출이 취소되었습니다.');
         }
-        // 다른 대원이 수락했을 때 알림
         else if (oldStatus == 'dispatched' && newStatus == 'accepted' && newData['responder'] != null) {
           final responderName = newData['responder']['name'] ?? '다른 대원';
           _showStatusChangeDialog('수락 완료', '$responderName님이 이 재난을 수락했습니다.');
@@ -111,7 +113,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
     });
   }
   
-  // 상태 변경 알림 다이얼로그
   void _showStatusChangeDialog(String title, String message) {
     showDialog(
       context: context,
@@ -124,7 +125,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                Navigator.of(context).pop(); // 상세 화면 닫기
+                Navigator.of(context).pop();
               },
               child: const Text('확인'),
             ),
@@ -134,7 +135,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
     );
   }
 
-  // 현재 위치 가져오기
   Future<void> _getCurrentPosition() async {
     try {
       LocationPermission permission = await Geolocator.checkPermission();
@@ -146,7 +146,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
       setState(() {
         userPosition = position;
 
-        // 거리 계산
         distanceToSite = Geolocator.distanceBetween(
           position.latitude,
           position.longitude,
@@ -154,12 +153,69 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
           widget.lng,
         );
       });
+      
+      // 위치를 가져온 후 경로 미리보기 로드
+      _loadDirectionsPreview();
     } catch (e) {
       debugPrint('위치 정보를 가져오는데 실패했습니다: $e');
     }
   }
+  
+  // 경로 미리보기 로드
+  Future<void> _loadDirectionsPreview() async {
+    if (userPosition == null) return;
+    
+    try {
+      final result = await DirectionsService.getDirections(
+        origin: LatLng(userPosition!.latitude, userPosition!.longitude),
+        destination: LatLng(widget.lat, widget.lng),
+      );
+      
+      if (result != null && mounted) {
+        setState(() {
+          _directionsResult = result;
+          _polylines = {
+            Polyline(
+              polylineId: const PolylineId('preview_route'),
+              points: result.polylinePoints,
+              color: Colors.blue.withOpacity(0.7),
+              width: 4,
+              patterns: [
+                PatternItem.dash(20),
+                PatternItem.gap(10),
+              ], // 점선으로 표시
+            ),
+          };
+          _showRoutePreview = true;
+        });
+        
+        // 카메라를 경로에 맞게 조정
+        _updateCameraToShowRoute();
+      }
+    } catch (e) {
+      debugPrint('경로 정보를 가져오는데 실패했습니다: $e');
+    }
+  }
+  
+  void _updateCameraToShowRoute() {
+    if (mapController == null || _directionsResult == null) return;
 
-  // 거리 포맷팅
+    final bounds = LatLngBounds(
+      southwest: LatLng(
+        _directionsResult!.polylinePoints.map((p) => p.latitude).reduce((a, b) => a < b ? a : b),
+        _directionsResult!.polylinePoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b),
+      ),
+      northeast: LatLng(
+        _directionsResult!.polylinePoints.map((p) => p.latitude).reduce((a, b) => a > b ? a : b),
+        _directionsResult!.polylinePoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b),
+      ),
+    );
+
+    mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, 100),
+    );
+  }
+
   String _formatDistance(double distance) {
     if (distance < 1000) {
       return '${distance.toStringAsFixed(0)}m';
@@ -168,25 +224,21 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
     }
   }
 
-  // (수락 함수 업데이트 - 임무 제한 기능 추가)
   Future<void> _acceptCall() async {
     setState(() {
       accepting = true;
     });
 
     try {
-      // 위치 정보 확인
       if (userPosition == null) {
         await _getCurrentPosition();
       }
 
-      // 현재 사용자 ID 가져오기
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser == null) {
         throw Exception('로그인 정보를 찾을 수 없습니다.');
       }
 
-      // 1. 먼저 해당 재난의 최신 상태 확인 (중복 수락 방지)
       final currentCallSnapshot = await db.ref("calls/${widget.callId}").get();
       if (!currentCallSnapshot.exists) {
         throw Exception('재난 정보를 찾을 수 없습니다.');
@@ -194,14 +246,12 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
       
       final currentCallData = Map<String, dynamic>.from(currentCallSnapshot.value as Map);
       
-      // 이미 다른 대원이 수락했는지 확인
       if (currentCallData['status'] == 'accepted' && currentCallData['responder'] != null) {
         if (mounted) {
           setState(() {
             accepting = false;
           });
           
-          // 다른 대원 정보 가져오기
           final responderInfo = Map<String, dynamic>.from(currentCallData['responder']);
           final responderName = responderInfo['name'] ?? '다른 대원';
           
@@ -215,7 +265,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
                   TextButton(
                     onPressed: () {
                       Navigator.of(context).pop();
-                      Navigator.of(context).pop(); // 상세 화면도 닫기
+                      Navigator.of(context).pop();
                     },
                     child: const Text('확인'),
                   ),
@@ -227,7 +277,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         }
       }
 
-      // 2. 활성 임무가 있는지 확인
       final hasActive = await CallDataService().hasActiveMission(
         currentUser.uid,
       );
@@ -246,25 +295,22 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         }
       }
 
-      // 3. 사용자 정보 가져오기
       final userSnapshot =
           await FirebaseDatabase.instance.ref('users/${currentUser.uid}').get();
 
       String userName = "대원";
-      String userPositionName = "대원"; // 변수명 변경 (userPosition과 충돌 방지)
-      String userRank = "소방사"; // rank 변수 추가
+      String userPositionName = "대원";
+      String userRank = "소방사";
 
       if (userSnapshot.exists) {
         final userData = Map<String, dynamic>.from(userSnapshot.value as Map);
         userName = userData['name'] ?? "대원";
-        userPositionName = userData['position'] ?? "대원"; // 변수명 변경
-        userRank = userData['rank'] ?? "소방사"; // rank 정보 가져오기
+        userPositionName = userData['position'] ?? "대원";
+        userRank = userData['rank'] ?? "소방사";
       }
 
-      // 4. 트랜잭션 방식으로 수락 처리
       final responderRef = db.ref("calls/${widget.callId}");
       
-      // 조건부 업데이트 - status가 'dispatched'이고 responder가 null일 때만 수락
       final TransactionResult result = await responderRef.runTransaction((Object? currentData) {
         if (currentData == null) {
           return Transaction.abort();
@@ -272,17 +318,14 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         
         Map<String, dynamic> callData = Map<String, dynamic>.from(currentData as Map);
         
-        // status가 'dispatched'가 아니면 트랜잭션 취소 (중요!)
         if (callData['status'] != 'dispatched') {
           return Transaction.abort();
         }
         
-        // 이미 수락된 경우 트랜잭션 취소
         if (callData['status'] == 'accepted' || callData['responder'] != null) {
           return Transaction.abort();
         }
         
-        // 수락 처리
         callData['status'] = 'accepted';
         callData['acceptedAt'] = DateTime.now().millisecondsSinceEpoch;
         callData['responder'] = {
@@ -299,7 +342,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
       });
 
       if (!result.committed) {
-        // 트랜잭션 실패 - 상태 확인을 위해 최신 데이터 다시 조회
         final latestSnapshot = await db.ref("calls/${widget.callId}").get();
         String errorMessage = '수락할 수 없는 재난입니다.';
         
@@ -329,7 +371,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
                   TextButton(
                     onPressed: () {
                       Navigator.of(context).pop();
-                      Navigator.of(context).pop(); // 상세 화면도 닫기
+                      Navigator.of(context).pop();
                     },
                     child: const Text('확인'),
                   ),
@@ -346,20 +388,73 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
           accepting = false;
         });
 
+        // 성공 메시지와 함께 경로 안내 시작
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("콜을 수락했습니다!"),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                const Text("임무를 수락했습니다!"),
+              ],
+            ),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
           ),
         );
 
-        // 수락 후 임무 화면으로 이동
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ActiveMissionScreen(callId: widget.callId),
-          ),
+        // 네비게이션 사용 여부 선택 다이얼로그
+        final useNavigation = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('🗺️ 네비게이션'),
+              content: const Text('재난 현장까지 네비게이션을 시작하시겠습니까?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('아니오'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                  child: const Text('네비게이션 시작'),
+                ),
+              ],
+            );
+          },
         );
+
+        // 화면 이동
+        if (useNavigation == true) {
+          // 네비게이션 화면으로 바로 이동
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => NavigationScreen(
+                callId: widget.callId,
+                missionData: Call(
+                  id: widget.callId,
+                  eventType: widget.description,
+                  address: callDetails?['address'] ?? '정보 없음',
+                  lat: widget.lat,
+                  lng: widget.lng,
+                  status: 'accepted',
+                  startAt: DateTime.now().millisecondsSinceEpoch,
+                ),
+              ),
+            ),
+          );
+        } else {
+          // 기존 임무 화면으로 이동
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ActiveMissionScreen(callId: widget.callId),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -373,7 +468,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
     }
   }
 
-  // 활성 임무가 있을 때 표시할 다이얼로그
   void _showActiveMissionDialog(dynamic activeMission, String message) {
     showDialog(
       context: context,
@@ -435,7 +529,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
               ElevatedButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  // 활성 임무 화면으로 이동
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
@@ -453,7 +546,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
     );
   }
 
-  // 시간 포맷팅 함수 (다이얼로그용)
   String _formatDialogTime(int? timestamp) {
     if (timestamp == null) return '';
     final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
@@ -463,7 +555,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
   @override
   void dispose() {
     _timeUpdateTimer?.cancel();
-    _callListener?.cancel(); // 리스너 해제
+    _callListener?.cancel();
     super.dispose();
   }
 
@@ -477,35 +569,103 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
           children: [
             // 지도 표시
             SizedBox(
-              height: 200,
+              height: 300,
               width: double.infinity,
-              child: GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: LatLng(widget.lat, widget.lng),
-                  zoom: 15,
-                ),
-                markers: {
-                  Marker(
-                    markerId: const MarkerId('incident'),
-                    position: LatLng(widget.lat, widget.lng),
-                    infoWindow: InfoWindow(title: widget.description),
-                  ),
-                  if (userPosition != null)
-                    Marker(
-                      markerId: const MarkerId('user'),
-                      position: LatLng(
-                        userPosition!.latitude,
-                        userPosition!.longitude,
+              child: Stack(
+                children: [
+                  GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: LatLng(widget.lat, widget.lng),
+                      zoom: 15,
+                    ),
+                    markers: {
+                      Marker(
+                        markerId: const MarkerId('incident'),
+                        position: LatLng(widget.lat, widget.lng),
+                        infoWindow: InfoWindow(title: widget.description),
                       ),
-                      infoWindow: const InfoWindow(title: '내 위치'),
-                      icon: BitmapDescriptor.defaultMarkerWithHue(
-                        BitmapDescriptor.hueBlue,
+                      if (userPosition != null)
+                        Marker(
+                          markerId: const MarkerId('user'),
+                          position: LatLng(
+                            userPosition!.latitude,
+                            userPosition!.longitude,
+                          ),
+                          infoWindow: const InfoWindow(title: '내 위치'),
+                          icon: BitmapDescriptor.defaultMarkerWithHue(
+                            BitmapDescriptor.hueBlue,
+                          ),
+                        ),
+                    },
+                    polylines: _polylines,
+                    onMapCreated: (controller) {
+                      mapController = controller;
+                      if (_directionsResult != null) {
+                        _updateCameraToShowRoute();
+                      }
+                    },
+                  ),
+                  // 경로 정보 오버레이
+                  if (_directionsResult != null && _showRoutePreview)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.route, color: Colors.blue[700], size: 24),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '예상 경로',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  Text(
+                                    '${_directionsResult!.distanceText} · ${_directionsResult!.durationText}',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 20),
+                              onPressed: () {
+                                setState(() {
+                                  _showRoutePreview = false;
+                                  _polylines.clear();
+                                });
+                              },
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                },
-                onMapCreated: (controller) {
-                  mapController = controller;
-                },
+                ],
               ),
             ),
 
@@ -559,7 +719,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
 
                   const SizedBox(height: 16),
 
-                  // 상황 정보를 별도 섹션으로 강조 (새로 추가)
+                  // 상황 정보
                   if (callDetails?['info'] != null &&
                       callDetails!['info'].toString().isNotEmpty)
                     Container(
@@ -613,18 +773,21 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: accepting ? null : _acceptCall,
-                        icon:
-                            accepting
-                                ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                                : const Icon(Icons.check),
-                        label: Text(accepting ? "수락 중..." : "이 콜 수락하기"),
+                        icon: accepting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.navigation),
+                        label: Text(
+                          accepting 
+                            ? "수락 중..." 
+                            : "임무 수락 및 경로 안내 시작"
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
                           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -659,7 +822,6 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
     );
   }
 
-  // 정보 행 위젯
   Widget _buildInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),

@@ -334,6 +334,8 @@ class CallDataService {
       await _callsRef.child(callId).update({
         'status': 'completed',
         'completedAt': DateTime.now().millisecondsSinceEpoch,
+        'responder': null,  // responder 정보 제거
+        'acceptedAt': null  // 수락 시간도 초기화
       });
 
       // 완료 후 활성 상태 업데이트 브로드캐스트

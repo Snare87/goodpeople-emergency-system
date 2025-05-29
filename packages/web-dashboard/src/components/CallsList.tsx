@@ -33,11 +33,16 @@ const CallListItem = memo<CallListItemProps>(({
     if (action) action(call.id);
   };
 
+  const handleItemClick = () => {
+    console.log('[CallListItem] Clicked on call:', call.id, call.eventType);
+    onSelect?.(call);
+  };
+
   const bgColor = CALL_TYPE_COLORS[call.eventType] || 'bg-white';
 
   return (
     <li
-      onClick={() => onSelect?.(call)}
+      onClick={handleItemClick}
       className={`cursor-pointer p-4 ${bgColor} rounded-lg shadow flex justify-between items-center
         ${isSelected ? 'ring-2 ring-primary' : ''}
         ${showCompletedInfo ? 'opacity-80' : ''} 

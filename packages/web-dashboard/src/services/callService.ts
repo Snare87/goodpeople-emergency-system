@@ -41,10 +41,33 @@ export const subscribeToCalls = (onDataChanged: CallsCallback): (() => void) => 
   onValue(callsRef, (snapshot) => {
     try {
       const data = snapshot.val() || {};
-      const calls: Call[] = Object.entries(data).map(([id, call]) => ({ 
-        id, 
-        ...(call as any)
-      }));
+      const calls: Call[] = Object.entries(data).map(([id, callData]) => {
+        const call = callData as any;
+        
+        // lat/lng를 location 객체로 변환
+        const processedCall: Call = {
+          id,
+          ...call
+        };
+        
+        // lat과 lng가 있으면 location 객체 생성
+        if (call.lat !== undefined && call.lng !== undefined) {
+          processedCall.location = {
+            lat: call.lat,
+            lng: call.lng
+          };
+        }
+        
+        return processedCall;
+      });
+      
+      console.log('[subscribeToCalls] Processed calls:', calls.map(c => ({
+        id: c.id,
+        eventType: c.eventType,
+        hasLocation: !!c.location,
+        location: c.location
+      })));
+      
       onDataChanged(calls);
     } catch (error) {
       console.error("Error processing call data:", error);
@@ -150,7 +173,9 @@ export const acceptCall = async (
 export const completeCall = (id: string): Promise<void> => {
   return update(ref(db, `calls/${id}`), { 
     status: 'completed', 
-    completedAt: Date.now() 
+    completedAt: Date.now(),
+    responder: null,  // responder 정보 제거
+    acceptedAt: null  // 수락 시간도 초기화
   });
 };
 

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Maps API 테스트</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        #map {
+            height: 400px;
+            width: 100%;
+            margin-top: 20px;
+            border: 2px solid #ccc;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗺️ Google Maps API 테스트</h1>
+    <div id="status"></div>
+    
+    <h2>테스트 기능</h2>
+    <button onclick="addTestMarkers()">📍 테스트 마커 추가</button>
+    <button onclick="addResponderMarker()">🚑 대원 마커 추가</button>
+    <button onclick="drawRoute()">📍➡️📍 경로 그리기</button>
+    <button onclick="moveToSeoul()">📍 서울로 이동</button>
+    
+    <div id="map"></div>
+
+    <script>
+        let map;
+        let markers = [];
+        let responderMarker;
+        let polyline;
+        const statusDiv = document.getElementById('status');
+
+        function initMap() {
+            try {
+                // 지도 생성
+                map = new google.maps.Map(document.getElementById('map'), {
+                    center: { lat: 37.5665, lng: 126.9780 }, // 서울
+                    zoom: 11
+                });
+                
+                statusDiv.innerHTML = '<div class="status success">✅ Google Maps 로드 성공!</div>';
+                
+                // 클릭 이벤트 추가
+                map.addListener('click', (e) => {
+                    const lat = e.latLng.lat();
+                    const lng = e.latLng.lng();
+                    statusDiv.innerHTML += `<div class="status success">클릭 위치: 위도 ${lat.toFixed(6)}, 경도 ${lng.toFixed(6)}</div>`;
+                });
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="status error">❌ Google Maps 초기화 실패: ' + error.message + '</div>';
+            }
+        }
+
+        function addTestMarkers() {
+            // 기존 마커 제거
+            markers.forEach(marker => marker.setMap(null));
+            markers = [];
+            
+            // 테스트 재난 위치
+            const testLocations = [
+                { lat: 37.5665, lng: 126.9780, title: "화재 - 서울역" },
+                { lat: 37.5700, lng: 126.9920, title: "구급 - 종로" },
+                { lat: 37.5550, lng: 126.9700, title: "구조 - 남산" }
+            ];
+            
+            testLocations.forEach((location, index) => {
+                const marker = new google.maps.Marker({
+                    position: { lat: location.lat, lng: location.lng },
+                    map: map,
+                    title: location.title,
+                    label: (index + 1).toString()
+                });
+                
+                const infoWindow = new google.maps.InfoWindow({
+                    content: `<div style="padding: 10px;">
+                        <strong>${location.title}</strong><br>
+                        위도: ${location.lat}<br>
+                        경도: ${location.lng}
+                    </div>`
+                });
+                
+                marker.addListener('click', () => {
+                    infoWindow.open(map, marker);
+                    map.setCenter(marker.getPosition());
+                    map.setZoom(14);
+                });
+                
+                markers.push(marker);
+            });
+            
+            statusDiv.innerHTML += '<div class="status success">✅ 테스트 마커 3개 추가됨</div>';
+        }
+
+        function addResponderMarker() {
+            // 기존 대원 마커 제거
+            if (responderMarker) {
+                responderMarker.setMap(null);
+            }
+            
+            // 대원 위치 (서울역 근처)
+            const responderPosition = { lat: 37.5680, lng: 126.9750 };
+            
+            responderMarker = new google.maps.Marker({
+                position: responderPosition,
+                map: map,
+                title: "김철수 대원",
+                icon: {
+                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                        <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="20" cy="20" r="18" fill="#2196F3" stroke="white" stroke-width="2"/>
+                            <text x="20" y="26" font-family="Arial" font-size="20" fill="white" text-anchor="middle">🚑</text>
+                        </svg>
+                    `),
+                    scaledSize: new google.maps.Size(40, 40),
+                    anchor: new google.maps.Point(20, 20)
+                }
+            });
+            
+            const infoWindow = new google.maps.InfoWindow({
+                content: `<div style="padding: 10px;">
+                    <strong>김철수 대원</strong><br>
+                    직책: 구급대원<br>
+                    상태: 출동중
+                </div>`
+            });
+            
+            responderMarker.addListener('click', () => {
+                infoWindow.open(map, responderMarker);
+            });
+            
+            statusDiv.innerHTML += '<div class="status success">✅ 대원 마커 추가됨</div>';
+        }
+
+        function drawRoute() {
+            // 기존 경로 제거
+            if (polyline) {
+                polyline.setMap(null);
+            }
+            
+            if (!responderMarker || markers.length === 0) {
+                alert('먼저 테스트 마커와 대원 마커를 추가하세요!');
+                return;
+            }
+            
+            // 대원 위치에서 첫 번째 마커까지 경로
+            const path = [
+                responderMarker.getPosition(),
+                markers[0].getPosition()
+            ];
+            
+            polyline = new google.maps.Polyline({
+                path: path,
+                geodesic: true,
+                strokeColor: '#2196F3',
+                strokeOpacity: 1.0,
+                strokeWeight: 3,
+                icons: [{
+                    icon: {
+                        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                        scale: 3
+                    },
+                    offset: '100%'
+                }]
+            });
+            
+            polyline.setMap(map);
+            
+            // 경로가 보이도록 줌 조정
+            const bounds = new google.maps.LatLngBounds();
+            path.forEach(point => bounds.extend(point));
+            map.fitBounds(bounds);
+            
+            statusDiv.innerHTML += '<div class="status success">✅ 경로 표시됨</div>';
+        }
+
+        function moveToSeoul() {
+            map.setCenter({ lat: 37.5665, lng: 126.9780 });
+            map.setZoom(11);
+            statusDiv.innerHTML += '<div class="status success">✅ 서울로 이동</div>';
+        }
+    </script>
+    
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAuTv114xfrpTOypJ0Qt5wehvo-AknUraM&callback=initMap&language=ko">
+    </script>
+</body>
+</html>

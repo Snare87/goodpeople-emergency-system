@@ -46,6 +46,9 @@ async function updateUserLocation(data, context) {
       .ref(`users/${userId}/lastLocation`)
       .set(locationData);
     
+    // 활성 임무가 있는 경우 해당 임무의 응답자 위치도 업데이트
+    await updateActiveCallResponderLocation(userId, locationData);
+    
     // 위치 히스토리 저장 (선택적 - 분석용)
     await saveLocationHistory(userId, locationData);
     
@@ -71,6 +74,60 @@ async function updateUserLocation(data, context) {
       'internal', 
       '위치 업데이트에 실패했습니다'
     );
+  }
+}
+
+/**
+ * 활성 임무의 응답자 위치 업데이트
+ * @param {string} userId - 사용자 ID
+ * @param {Object} locationData - 위치 데이터
+ */
+async function updateActiveCallResponderLocation(userId, locationData) {
+  try {
+    // 모든 활성 재난 확인
+    const callsRef = admin.database().ref('calls');
+    const snapshot = await callsRef
+      .orderByChild('status')
+      .equalTo('accepted')
+      .once('value');
+    
+    if (!snapshot.exists()) return;
+    
+    const updates = {};
+    
+    // 해당 사용자가 응답자인 재난 찾기
+    snapshot.forEach((callSnapshot) => {
+      const call = callSnapshot.val();
+      const callId = callSnapshot.key;
+      
+      // responder.id가 해당 사용자 ID를 포함하는지 확인
+      if (call.responder && call.responder.id && call.responder.id.includes(userId)) {
+        // 응답자 위치 업데이트
+        updates[`calls/${callId}/responder/lat`] = locationData.lat;
+        updates[`calls/${callId}/responder/lng`] = locationData.lng;
+        updates[`calls/${callId}/responder/updatedAt`] = locationData.updatedAt;
+        
+        if (locationData.speed !== null) {
+          updates[`calls/${callId}/responder/speed`] = locationData.speed;
+        }
+        
+        logger.info('활성 임무 응답자 위치 업데이트', { 
+          callId, 
+          userId,
+          lat: locationData.lat,
+          lng: locationData.lng
+        });
+      }
+    });
+    
+    // 업데이트가 있으면 실행
+    if (Object.keys(updates).length > 0) {
+      await admin.database().ref().update(updates);
+    }
+    
+  } catch (error) {
+    // 활성 임무 위치 업데이트 실패는 로그만 남기고 계속 진행
+    logger.error('활성 임무 응답자 위치 업데이트 실패', { userId, error });
   }
 }
 
@@ -165,8 +222,51 @@ async function getUsersLocations(userIds) {
   }
 }
 
+/**
+ * 활성 임무의 응답자들 위치 조회
+ * @returns {Promise<Object>} callId를 키로 하는 응답자 위치 맵
+ */
+async function getActiveRespondersLocations() {
+  try {
+    const locations = {};
+    
+    // 수락된 상태의 재난들 조회
+    const callsRef = admin.database().ref('calls');
+    const snapshot = await callsRef
+      .orderByChild('status')
+      .equalTo('accepted')
+      .once('value');
+    
+    if (!snapshot.exists()) return locations;
+    
+    snapshot.forEach((callSnapshot) => {
+      const call = callSnapshot.val();
+      const callId = callSnapshot.key;
+      
+      if (call.responder && call.responder.lat && call.responder.lng) {
+        locations[callId] = {
+          responder: call.responder,
+          destination: {
+            lat: call.lat,
+            lng: call.lng,
+            address: call.address,
+            eventType: call.eventType
+          }
+        };
+      }
+    });
+    
+    return locations;
+    
+  } catch (error) {
+    logger.error('활성 응답자 위치 조회 실패', error);
+    return {};
+  }
+}
+
 module.exports = {
   updateUserLocation,
   getUserLastLocation,
-  getUsersLocations
+  getUsersLocations,
+  getActiveRespondersLocations
 };

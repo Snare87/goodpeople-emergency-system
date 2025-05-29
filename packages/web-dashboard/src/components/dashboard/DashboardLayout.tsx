@@ -4,7 +4,7 @@ import Card from '../common/Card';
 import TabNav from '../common/TabNav';
 import CallsList from '../CallsList';
 import CallDetailPanel from './CallDetailPanel';
-import KakaoMap from '../KakaoMap';
+import GoogleMap from '../GoogleMap';
 import { Call } from '../../services/callService';
 
 type ListTab = 'active' | 'completed';
@@ -52,6 +52,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // 지도
   mapCenter
 }) => {
+  // 디버깅 로그
+  console.log('[DashboardLayout] selectedCallId:', selectedCallId, 'mapCenter:', mapCenter);
   const listTabs = [
     { key: 'active', label: '재난 목록' },
     { key: 'completed', label: '완료 목록' }
@@ -109,7 +111,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* 지도 */}
         <div className="h-[55%]">
           <div className="bg-white rounded-lg shadow h-full relative overflow-hidden">
-            <KakaoMap calls={activeCalls} center={mapCenter} />
+            <GoogleMap calls={activeCalls} center={mapCenter} selectedCallId={selectedCallId || undefined} />
           </div>
         </div>
       </div>
