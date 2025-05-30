@@ -391,13 +391,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
 
       final responderRef = db.ref("calls/${widget.callId}");
       
-      // 현재 상태 확인
-      final currentCallSnapshot = await db.ref("calls/${widget.callId}").get();
-      if (!currentCallSnapshot.exists) {
-        throw Exception('재난 정보를 찾을 수 없습니다.');
-      }
-      
-      final currentCallData = Map<String, dynamic>.from(currentCallSnapshot.value as Map);
+      // 현재 상태 확인 병합 (중복 제거)
       
       // 이미 최종 선택된 대원이 있는지 확인
       if (currentCallData['selectedResponder'] != null) {
