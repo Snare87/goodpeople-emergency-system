@@ -1,0 +1,12 @@
+{
+  "name": "firebase-scripts",
+  "version": "1.0.0",
+  "description": "Firebase admin scripts",
+  "main": "index.js",
+  "scripts": {
+    "create-users": "node create-test-users.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}

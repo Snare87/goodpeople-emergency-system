@@ -29,6 +29,38 @@ export interface Call {
     position: string;
     rank?: string;
   };
+  // 다중 후보자 시스템을 위한 필드
+  candidates?: Record<string, {
+    id: string;
+    userId: string;
+    name: string;
+    position: string;
+    rank?: string;
+    acceptedAt: number;
+    routeInfo?: {
+      distance: number;
+      distanceText: string;
+      duration: number;
+      durationText: string;
+      calculatedAt: number;
+    };
+  }>;
+  selectedResponder?: {
+    id: string;
+    userId: string;
+    name: string;
+    position: string;
+    rank?: string;
+    acceptedAt: number;
+    selectedAt: number;
+    routeInfo?: {
+      distance: number;
+      distanceText: string;
+      duration: number;
+      durationText: string;
+      calculatedAt: number;
+    };
+  };
 }
 
 // 콜백 함수 타입

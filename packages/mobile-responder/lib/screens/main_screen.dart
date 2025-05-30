@@ -6,6 +6,7 @@ import 'package:goodpeople_responder/screens/my_missions_screen.dart';
 import 'package:goodpeople_responder/screens/profile_info_screen.dart';
 import 'package:goodpeople_responder/screens/login_screen.dart';
 import 'package:goodpeople_responder/services/call_data_service.dart';
+import 'package:goodpeople_responder/simulator/candidate_system_simulator.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -214,6 +215,19 @@ class _MainScreenState extends State<MainScreen> {
               onPressed: _refreshHomeScreen,
               tooltip: '새로고침',
             ),
+          // 시뮬레이터 버튼 추가 (개발용)
+          IconButton(
+            icon: const Icon(Icons.science),  // 실험 아이콘
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CandidateSystemSimulator(),
+                ),
+              );
+            },
+            tooltip: '시뮬레이터',
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _logout,

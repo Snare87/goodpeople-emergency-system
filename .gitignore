@@ -11,6 +11,8 @@ node_modules/
 **/*-api-key*
 **/*-secret*
 **/upload-data.js
+serviceAccountKey.json
+scripts/serviceAccountKey.json
 
 # Firebase configuration files (contain API keys)
 # These are auto-generated but should be kept private

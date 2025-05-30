@@ -97,17 +97,39 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         final newData = Map<String, dynamic>.from(event.snapshot.value as Map);
         final oldStatus = callDetails?['status'];
         final newStatus = newData['status'];
+        final currentUser = FirebaseAuth.instance.currentUser;
         
         setState(() {
           callDetails = newData;
         });
         
+        // 호출 취소
         if (oldStatus == 'dispatched' && newStatus == 'idle') {
           _showStatusChangeDialog('호출 취소', '이 재난의 호출이 취소되었습니다.');
         }
-        else if (oldStatus == 'dispatched' && newStatus == 'accepted' && newData['responder'] != null) {
-          final responderName = newData['responder']['name'] ?? '다른 대원';
-          _showStatusChangeDialog('수락 완료', '$responderName님이 이 재난을 수락했습니다.');
+        // 최종 대원 선택됨
+        else if (newData['selectedResponder'] != null && 
+                callDetails?['selectedResponder'] == null &&
+                currentUser != null) {
+          final selectedResponder = Map<String, dynamic>.from(newData['selectedResponder']);
+          
+          // 내가 선택된 경우
+          if (selectedResponder['userId'] == currentUser.uid) {
+            _showSelectionDialog(
+              '🎉 배정 완료!', 
+              '상황실에서 귀하를 선택했습니다. 지금 바로 출동하세요!',
+              true
+            );
+          } 
+          // 다른 대원이 선택된 경우
+          else {
+            final responderName = selectedResponder['name'] ?? '다른 대원';
+            _showSelectionDialog(
+              '📌 대원 선택 완료', 
+              '$responderName님이 이 재난에 배정되었습니다.',
+              false
+            );
+          }
         }
       }
     });
@@ -129,6 +151,64 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
               },
               child: const Text('확인'),
             ),
+          ],
+        );
+      },
+    );
+  }
+  
+  void _showSelectionDialog(String title, String message, bool isSelected) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            if (isSelected) ...
+            [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop();
+                },
+                child: const Text('나중에'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop();
+                  // 네비게이션 시작
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NavigationScreen(
+                        callId: widget.callId,
+                        missionData: Call(
+                          id: widget.callId,
+                          eventType: widget.description,
+                          address: callDetails?['address'] ?? '정보 없음',
+                          lat: widget.lat,
+                          lng: widget.lng,
+                          status: 'accepted',
+                          startAt: DateTime.now().millisecondsSinceEpoch,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                child: const Text('네비게이션 시작'),
+              ),
+            ] else
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop();
+                },
+                child: const Text('확인'),
+              ),
           ],
         );
       },
@@ -311,51 +391,48 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
 
       final responderRef = db.ref("calls/${widget.callId}");
       
-      final TransactionResult result = await responderRef.runTransaction((Object? currentData) {
-        if (currentData == null) {
-          return Transaction.abort();
+      // 현재 상태 확인
+      final currentCallSnapshot = await db.ref("calls/${widget.callId}").get();
+      if (!currentCallSnapshot.exists) {
+        throw Exception('재난 정보를 찾을 수 없습니다.');
+      }
+      
+      final currentCallData = Map<String, dynamic>.from(currentCallSnapshot.value as Map);
+      
+      // 이미 최종 선택된 대원이 있는지 확인
+      if (currentCallData['selectedResponder'] != null) {
+        if (mounted) {
+          setState(() {
+            accepting = false;
+          });
+          
+          final selectedResponder = Map<String, dynamic>.from(currentCallData['selectedResponder']);
+          final responderName = selectedResponder['name'] ?? '다른 대원';
+          
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: const Text('⚠️ 이미 배정된 재난'),
+                content: Text('$responderName님이 이미 이 재난에 배정되었습니다.'),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('확인'),
+                  ),
+                ],
+              );
+            },
+          );
+          return;
         }
-        
-        Map<String, dynamic> callData = Map<String, dynamic>.from(currentData as Map);
-        
-        if (callData['status'] != 'dispatched') {
-          return Transaction.abort();
-        }
-        
-        if (callData['status'] == 'accepted' || callData['responder'] != null) {
-          return Transaction.abort();
-        }
-        
-        callData['status'] = 'accepted';
-        callData['acceptedAt'] = DateTime.now().millisecondsSinceEpoch;
-        callData['responder'] = {
-          "id": "resp_${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}",
-          "name": userName,
-          "position": userPositionName,
-          "rank": userRank,
-          "lat": userPosition?.latitude,
-          "lng": userPosition?.longitude,
-          "updatedAt": DateTime.now().millisecondsSinceEpoch,
-        };
-        
-        return Transaction.success(callData);
-      });
-
-      if (!result.committed) {
-        final latestSnapshot = await db.ref("calls/${widget.callId}").get();
-        String errorMessage = '수락할 수 없는 재난입니다.';
-        
-        if (latestSnapshot.exists) {
-          final latestData = Map<String, dynamic>.from(latestSnapshot.value as Map);
-          if (latestData['status'] == 'idle') {
-            errorMessage = '호출이 취소된 재난입니다.';
-          } else if (latestData['status'] == 'accepted' && latestData['responder'] != null) {
-            errorMessage = '다른 대원이 이미 이 재난을 수락했습니다.';
-          } else if (latestData['status'] == 'completed') {
-            errorMessage = '이미 종료된 재난입니다.';
-          }
-        }
-        
+      }
+      
+      // 상태가 idle이면 수락 불가
+      if (currentCallData['status'] == 'idle') {
         if (mounted) {
           setState(() {
             accepting = false;
@@ -366,7 +443,7 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
             builder: (BuildContext context) {
               return AlertDialog(
                 title: const Text('⚠️ 수락 실패'),
-                content: Text(errorMessage),
+                content: const Text('호출이 취소된 재난입니다.'),
                 actions: [
                   TextButton(
                     onPressed: () {
@@ -383,78 +460,106 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
         }
       }
 
+      // 🚨 변경: candidates에 추가하는 방식으로 수정
+      final candidateData = {
+        "id": "cand_${currentUser.uid}_${DateTime.now().millisecondsSinceEpoch}",
+        "userId": currentUser.uid,
+        "name": userName,
+        "position": userPositionName,
+        "rank": userRank,
+        "lat": userPosition?.latitude,
+        "lng": userPosition?.longitude,
+        "acceptedAt": DateTime.now().millisecondsSinceEpoch,
+        "routeInfo": _directionsResult != null ? {
+          "distance": _directionsResult!.totalDistance,
+          "distanceText": _directionsResult!.distanceText,
+          "duration": _directionsResult!.totalDuration,
+          "durationText": _directionsResult!.durationText,
+          "calculatedAt": DateTime.now().millisecondsSinceEpoch,
+        } : null,
+      };
+
+      // candidates/{userId}에 저장
+      await db.ref("calls/${widget.callId}/candidates/${currentUser.uid}").set(candidateData);
+      
+      // 상태는 그대로 dispatched 유지 (여러 명이 수락 가능)
+      await db.ref("calls/${widget.callId}/status").set('dispatched');
+      
+      // 첫 번째 후보자인 경우 acceptedAt 기록
+      final candidatesSnapshot = await db.ref("calls/${widget.callId}/candidates").get();
+      if (candidatesSnapshot.value == null || (candidatesSnapshot.value as Map).length == 1) {
+        await db.ref("calls/${widget.callId}/acceptedAt").set(DateTime.now().millisecondsSinceEpoch);
+      }
+
       if (mounted) {
         setState(() {
           accepting = false;
         });
 
-        // 성공 메시지와 함께 경로 안내 시작
+        // 성공 메시지 변경
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
                 const Icon(Icons.check_circle, color: Colors.white),
                 const SizedBox(width: 8),
-                const Text("임무를 수락했습니다!"),
+                const Text("후보자로 등록되었습니다. 상황실의 최종 선택을 기다리세요."),
               ],
             ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 3),
           ),
         );
 
-        // 네비게이션 사용 여부 선택 다이얼로그
-        final useNavigation = await showDialog<bool>(
+        // 후보자 대기 정보 표시
+        await showDialog(
           context: context,
           barrierDismissible: false,
           builder: (BuildContext context) {
             return AlertDialog(
-              title: const Text('🗺️ 네비게이션'),
-              content: const Text('재난 현장까지 네비게이션을 시작하시겠습니까?'),
+              title: const Text('📌 후보자 등록 완료'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('후보자로 등록되었습니다.'),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '📢 다음 단계',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('1. 상황실에서 후보자 목록 확인'),
+                        const Text('2. 최적 대원 선택'),
+                        const Text('3. 선택 시 알림을 받게 됩니다'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('아니오'),
-                ),
                 ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(true),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).pop(); // CallDetailScreen도 닫기
+                  },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                  child: const Text('네비게이션 시작'),
+                  child: const Text('확인'),
                 ),
               ],
             );
           },
         );
-
-        // 화면 이동
-        if (useNavigation == true) {
-          // 네비게이션 화면으로 바로 이동
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => NavigationScreen(
-                callId: widget.callId,
-                missionData: Call(
-                  id: widget.callId,
-                  eventType: widget.description,
-                  address: callDetails?['address'] ?? '정보 없음',
-                  lat: widget.lat,
-                  lng: widget.lng,
-                  status: 'accepted',
-                  startAt: DateTime.now().millisecondsSinceEpoch,
-                ),
-              ),
-            ),
-          );
-        } else {
-          // 기존 임무 화면으로 이동
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ActiveMissionScreen(callId: widget.callId),
-            ),
-          );
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -767,52 +872,8 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
 
                   const SizedBox(height: 16),
 
-                  // 수락 버튼
-                  if (callDetails?['status'] != 'accepted')
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: accepting ? null : _acceptCall,
-                        icon: accepting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.navigation),
-                        label: Text(
-                          accepting 
-                            ? "수락 중..." 
-                            : "임무 수락 및 경로 안내 시작"
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          textStyle: const TextStyle(fontSize: 18),
-                        ),
-                      ),
-                    ),
-
-                  if (callDetails?['status'] == 'accepted')
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.green[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        '이미 수락된 재난입니다',
-                        style: TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                  // 수락 버튼 표시 조건
+                  _buildActionButton(),
                 ],
               ),
             ),
@@ -845,6 +906,160 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+  
+  Widget _buildActionButton() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return const SizedBox.shrink();
+    
+    // 이미 최종 선택된 대원이 있는 경우
+    if (callDetails?['selectedResponder'] != null) {
+      final selectedResponder = Map<String, dynamic>.from(callDetails!['selectedResponder']);
+      final isMe = selectedResponder['userId'] == currentUser.uid;
+      
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.green[100] : Colors.blue[100],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isMe ? Colors.green[300]! : Colors.blue[300]!),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              isMe ? Icons.check_circle : Icons.info,
+              color: isMe ? Colors.green[700] : Colors.blue[700],
+              size: 24,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isMe 
+                ? '귀하가 이 재난에 배정되었습니다' 
+                : '${selectedResponder['name']}님이 배정되었습니다',
+              style: TextStyle(
+                color: isMe ? Colors.green[700] : Colors.blue[700],
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (isMe) ...[
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NavigationScreen(
+                        callId: widget.callId,
+                        missionData: Call(
+                          id: widget.callId,
+                          eventType: widget.description,
+                          address: callDetails?['address'] ?? '정보 없음',
+                          lat: widget.lat,
+                          lng: widget.lng,
+                          status: 'accepted',
+                          startAt: DateTime.now().millisecondsSinceEpoch,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.navigation),
+                label: const Text('네비게이션 시작'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+    
+    // 후보자 목록이 있고 내가 이미 후보자인 경우
+    if (callDetails?['candidates'] != null) {
+      final candidates = Map<String, dynamic>.from(callDetails!['candidates']);
+      if (candidates.containsKey(currentUser.uid)) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.blue[100],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue[300]!),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.hourglass_empty, color: Colors.blue[700]),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '후보자로 등록됨 - 상황실 선택 대기중',
+                  style: TextStyle(
+                    color: Colors.blue[700],
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+    
+    // 아직 후보자가 아닌 경우 - 수락 버튼 표시
+    if (callDetails?['status'] == 'dispatched') {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: accepting ? null : _acceptCall,
+          icon: accepting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Icon(Icons.person_add),
+          label: Text(
+            accepting 
+              ? "등록 중..." 
+              : "후보자로 등록하기"
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            textStyle: const TextStyle(fontSize: 18),
+          ),
+        ),
+      );
+    }
+    
+    // 기타 상태
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        callDetails?['status'] == 'idle' 
+          ? '호출 대기중'
+          : callDetails?['status'] == 'completed'
+            ? '종료된 재난'
+            : '상태: ${callDetails?['status'] ?? '알 수 없음'}',
+        style: const TextStyle(
+          color: Colors.grey,
+          fontWeight: FontWeight.bold,
+        ),
+        textAlign: TextAlign.center,
       ),
     );
   }

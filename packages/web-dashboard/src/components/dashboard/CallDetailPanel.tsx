@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import EmptyState from '../common/EmptyState';
 import CallStatusButtons from './CallStatusButtons';
 import DispatchInfoCard from './DispatchInfoCard';
-import ResponderInfo from './ResponderInfo';
+import CandidatesInfo from './CandidatesInfo';
 import SituationInfo from './SituationInfo';
 import { Call } from '../../services/callService';
 
@@ -67,12 +67,18 @@ const CallDetailPanel: React.FC<CallDetailPanelProps> = ({
         </div>
       </div>
       
-       {/* 중앙: 응답자 정보 */}
+       {/* 중앙: 후보자/응답자 정보 */}
       <div className="w-[400px] px-4">
         <div className="bg-gray-100 rounded-lg p-4 h-full flex flex-col">
-          <h3 className="text-lg font-semibold mb-3">응답자</h3>
+          <h3 className="text-lg font-semibold mb-3">
+            {call.selectedResponder ? '배정된 대원' : '후보자 목록'}
+          </h3>
           <div className="flex-1">
-            <ResponderInfo responder={call.responder} />
+            <CandidatesInfo 
+              callId={call.id}
+              candidates={call.candidates} 
+              selectedResponder={call.selectedResponder}
+            />
           </div>
         </div>
       </div>

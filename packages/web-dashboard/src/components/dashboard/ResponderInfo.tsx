@@ -10,6 +10,13 @@ interface Responder {
   name: string;
   position: string;
   rank?: string;
+  routeInfo?: {
+    distance: number;
+    distanceText: string;
+    duration: number;
+    durationText: string;
+    calculatedAt: number;
+  };
 }
 
 interface ResponderInfoProps {
@@ -71,6 +78,37 @@ const ResponderInfo: React.FC<ResponderInfoProps> = ({ responder }) => {
         </div>
         <Badge variant="warning" size="md">진행중</Badge>
       </div>
+      
+      {/* 경로 정보 (새로 추가) */}
+      {responder.routeInfo && (
+        <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold text-blue-800">
+              🗺️ 예상 도착 정보 (T맵)
+            </h4>
+            <Badge variant="info" size="sm">
+              실시간 교통 반영
+            </Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-gray-600">거리</p>
+              <p className="text-lg font-bold text-blue-900">
+                {responder.routeInfo.distanceText}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-600">예상 시간</p>
+              <p className="text-lg font-bold text-blue-900">
+                {responder.routeInfo.durationText}
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            계산 시각: {new Date(responder.routeInfo.calculatedAt).toLocaleTimeString()}
+          </p>
+        </div>
+      )}
       
       {/* 자격증 정보 (확대 및 세로 배치) */}
       <div className="flex-1">
