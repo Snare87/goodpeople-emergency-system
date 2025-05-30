@@ -2,10 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
-import 'package:cloud_functions/cloud_functions.dart';
+
 import '../widgets/profile/profile_widgets.dart';
 
 class ProfileInfoScreen extends StatefulWidget {
@@ -236,45 +236,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     }
   }
 
-  // Cloud Functions 관련 메서드 추가
-  Future<void> _testFcmNotification() async {
-    try {
-      // 현재 FCM 토큰 가져오기
-      final fcmToken = await _getFcmToken();
-      if (fcmToken == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('FCM 토큰을 가져올 수 없습니다')));
-        return;
-      }
 
-      // Cloud Functions 호출
-      final functions = FirebaseFunctions.instanceFor(
-        region: 'asia-southeast1',
-      );
-      final callable = functions.httpsCallable('testFcmSend');
-
-      final result = await callable.call({'token': fcmToken});
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('테스트 알림 전송 성공: ${result.data['messageId']}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('테스트 알림 전송 실패: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
   Future<void> _checkLocationPermission() async {
     debugPrint('📍 [위치 권한] 확인 시작');
@@ -321,15 +283,7 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
     }
   }
 
-  // FCM 토큰 확인 함수 추가
-  Future<String?> _getFcmToken() async {
-    try {
-      final messaging = FirebaseMessaging.instance;
-      return await messaging.getToken();
-    } catch (e) {
-      return null;
-    }
-  }
+
 
   void _onCertificationChanged(String cert, bool value) {
     setState(() {
@@ -346,11 +300,12 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('내 정보'), backgroundColor: Colors.red),
-      body:
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
+
+      body: SafeArea(
+        child:
+            _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
                 child: Form(
                   key: _formKey,
@@ -554,30 +509,12 @@ class _ProfileInfoScreenState extends State<ProfileInfoScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // 디버그 정보
-                      DebugInfo(notificationEnabled: _notificationEnabled),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // FCM 알림 테스트 버튼
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _testFcmNotification,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                          child: const Text(
-                            'FCM 알림 테스트',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                        ),
-                      ),
+
                     ],
                   ),
                 ),
               ),
+      ),
     );
   }
 
