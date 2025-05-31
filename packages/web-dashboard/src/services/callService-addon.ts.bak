@@ -1,0 +1,90 @@
+// src/services/callService-addon.ts
+import { ref, runTransaction } from 'firebase/database';
+import { db } from '../firebase';
+
+// 대원 선택 - 다중 후보자 시스템
+export const selectResponder = async (
+  callId: string,
+  candidateId: string
+): Promise<void> => {
+  console.log('[selectResponder] 시작:', callId, candidateId);
+  
+  try {
+    const callRef = ref(db, `calls/${callId}`);
+    
+    // Transaction을 사용한 원자적 업데이트
+    const result = await runTransaction(callRef, (currentData) => {
+      if (!currentData) {
+        return; // Transaction abort
+      }
+      
+      // 후보자가 있는지 확인
+      if (!currentData.candidates || !currentData.candidates[candidateId]) {
+        console.error('[선택 실패] 후보자를 찾을 수 없음');
+        return; // Transaction abort
+      }
+      
+      const candidate = currentData.candidates[candidateId];
+      
+      // 선택된 대원 정보 설정
+      currentData.selectedResponder = {
+        ...candidate,
+        selectedAt: Date.now()
+      };
+      
+      // 상태를 accepted로 변경
+      currentData.status = 'accepted';
+      currentData.acceptedAt = Date.now();
+      
+      return currentData;
+    });
+    
+    if (!result.committed) {
+      throw new Error('대원 선택에 실패했습니다.');
+    }
+    
+    console.log('[selectResponder] 선택 성공');
+  } catch (error) {
+    console.error('[selectResponder] 오류:', error);
+    throw error;
+  }
+};
+
+// 대원 선택 취소
+export const deselectResponder = async (callId: string): Promise<void> => {
+  console.log('[deselectResponder] 시작:', callId);
+  
+  try {
+    const callRef = ref(db, `calls/${callId}`);
+    
+    // Transaction을 사용한 원자적 업데이트
+    const result = await runTransaction(callRef, (currentData) => {
+      if (!currentData) {
+        return; // Transaction abort
+      }
+      
+      // 선택된 대원이 있는 경우만 취소 가능
+      if (!currentData.selectedResponder) {
+        return; // Transaction abort
+      }
+      
+      // 선택된 대원 정보 삭제
+      delete currentData.selectedResponder;
+      delete currentData.acceptedAt;
+      
+      // 상태를 dispatched로 되돌림
+      currentData.status = 'dispatched';
+      
+      return currentData;
+    });
+    
+    if (!result.committed) {
+      throw new Error('대원 선택 취소에 실패했습니다.');
+    }
+    
+    console.log('[deselectResponder] 취소 성공');
+  } catch (error) {
+    console.error('[deselectResponder] 오류:', error);
+    throw error;
+  }
+};

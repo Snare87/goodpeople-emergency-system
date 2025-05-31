@@ -103,7 +103,7 @@ class CallDataService {
           try {
             final call = Call.fromMap(key.toString(), value);
             final status = call.status;
-            final hasResponder = call.responder != null;
+            final hasResponder = call.selectedResponder != null;
 
             debugPrint(
               '[CallDataService] call $key 처리 중: status=$status, hasResponder=$hasResponder, eventType=${call.eventType}, address=${call.address}',
@@ -145,7 +145,7 @@ class CallDataService {
               // 수락된 재난이나 완료된 재난은 표시하지 않음
               if (status == 'accepted' && hasResponder) {
                 debugPrint(
-                  '[CallDataService] ❌ call $key 이미 수락됨 - 수락자: ${call.responder?.name}',
+                  '[CallDataService] ❌ call $key 이미 수락됨 - 수락자: ${call.selectedResponder?.name}',
                 );
               } else {
                 debugPrint(
@@ -231,22 +231,22 @@ class CallDataService {
           try {
             final call = Call.fromMap(key.toString(), value);
 
-            // 응답자가 있고, 상태가 accepted이고, 완료되지 않은 경우
-            final hasResponder = call.responder != null;
+            // 선택된 대원이 있고, 상태가 accepted이고, 완료되지 않은 경우
+            final hasResponder = call.selectedResponder != null;
             final isAccepted = call.status == 'accepted';
             final isNotCompleted = call.status != 'completed';
 
             debugPrint(
-              '[CallDataService] Call $key 검사: hasResponder=$hasResponder, status=${call.status}, responder=${call.responder?.name}, responderId=${call.responder?.id}',
+              '[CallDataService] Call $key 검사: hasResponder=$hasResponder, status=${call.status}, responder=${call.selectedResponder?.name}, responderId=${call.selectedResponder?.userId}',
             );
 
-            // 중요: responder의 ID가 현재 사용자 ID를 포함하는지 확인
+            // 중요: selectedResponder의 userId가 현재 사용자 ID와 일치하는지 확인
             if (hasResponder && isAccepted && isNotCompleted) {
-              // responder.id는 "resp_userId_timestamp" 형식
-              final isMyMission = call.responder!.id.contains(userId);
+              // selectedResponder.userId와 현재 사용자 ID 비교
+              final isMyMission = call.selectedResponder!.userId == userId;
 
               debugPrint(
-                '[CallDataService] 임무 소유자 확인: responderId=${call.responder!.id}, userId=$userId, isMyMission=$isMyMission',
+                '[CallDataService] 임무 소유자 확인: responderId=${call.selectedResponder!.userId}, userId=$userId, isMyMission=$isMyMission',
               );
 
               if (isMyMission) {
@@ -304,22 +304,30 @@ class CallDataService {
         return false;
       }
       
-      // 이미 다른 대원이 수락했는지 확인
-      if (call.responder != null) {
-        debugPrint('[CallDataService] 이미 다른 대원이 수락한 재난입니다. responder: ${call.responder?.name}');
+      // 이미 다른 대원이 수락했는지 확인 (선택된 대원이 있는지)
+      if (call.selectedResponder != null) {
+        debugPrint('[CallDataService] 이미 다른 대원이 선택된 재난입니다. selectedResponder: ${call.selectedResponder?.name}');
+        return false;
+      }
+      
+      // 후보자가 있는지 확인 (신규 시스템)
+      if (call.candidates != null && call.candidates!.containsKey(responderId.split('_')[1])) {
+        debugPrint('[CallDataService] 이미 후보자로 등록되어 있습니다.');
         return false;
       }
 
-      // 상태 확인 후 수락 처리
-      await _callsRef.child(callId).update({
-        'status': 'accepted',
+      // 상태 확인 후 수락 처리 (신규 시스템 - 후보자로만 등록)
+      final userId = responderId.split('_')[1]; // resp_userId_timestamp에서 userId 추출
+      final candidateData = {
+        'id': responderId,
+        'userId': userId,
+        'name': responderName,
+        'position': position,
         'acceptedAt': DateTime.now().millisecondsSinceEpoch,
-        'responder': {
-          'id': responderId,
-          'name': responderName,
-          'position': position,
-        },
-      });
+      };
+      
+      // candidates 노드에 추가
+      await _callsRef.child(callId).child('candidates').child(userId).update(candidateData);
       debugPrint('[CallDataService] 재난 수락 성공: $callId');
       return true;
     } catch (e) {
@@ -334,9 +342,11 @@ class CallDataService {
       await _callsRef.child(callId).update({
         'status': 'completed',
         'completedAt': DateTime.now().millisecondsSinceEpoch,
-        'responder': null,  // responder 정보 제거
+        'selectedResponder': null,  // selectedResponder 정보 제거
         'acceptedAt': null  // 수락 시간도 초기화
       });
+      
+      // candidates 노드는 유지 (기록용)
 
       // 완료 후 활성 상태 업데이트 브로드캐스트
       _activeStatusController.add(false);
@@ -359,14 +369,19 @@ class CallDataService {
       final callData = Map<String, dynamic>.from(snapshot.value as Map);
       final call = Call.fromMap(callId, callData);
 
-      // 자신이 수락한 임무인지 확인
-      if (call.responder != null &&
-          call.responder!.id.contains(currentUserId)) {
-        await _callsRef.child(callId).update({
-          'status': 'dispatched',
-          'acceptedAt': null,
-          'responder': null,
-        });
+      // 자신이 후보자로 등록된 임무인지 확인 (신규 시스템)
+      if (call.candidates != null && call.candidates!.containsKey(currentUserId)) {
+        // candidates에서 자신을 삭제
+        await _callsRef.child(callId).child('candidates').child(currentUserId).remove();
+        
+        // 만약 선택된 대원이 자신이라면 selectedResponder도 삭제
+        if (call.selectedResponder != null && call.selectedResponder!.userId == currentUserId) {
+          await _callsRef.child(callId).update({
+            'status': 'dispatched',
+            'acceptedAt': null,
+            'selectedResponder': null,
+          });
+        }
 
         debugPrint('[CallDataService] 수락 취소 성공: $callId');
         return true;
@@ -380,14 +395,15 @@ class CallDataService {
     }
   }
 
-  // 응답자 위치 업데이트 (기존 로직 유지)
+  // 선택된 대원 위치 업데이트 (신규 시스템)
   Future<bool> updateResponderLocation(
     String callId,
     double lat,
     double lng,
   ) async {
     try {
-      await _callsRef.child(callId).child('responder').update({
+      // selectedResponder의 위치 업데이트
+      await _callsRef.child(callId).child('selectedResponder').update({
         'lat': lat,
         'lng': lng,
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
@@ -426,10 +442,10 @@ class CallDataService {
 
         // accepted 상태이고 완료되지 않은 임무가 있는지 확인
         if (call.status == 'accepted' &&
-            call.responder != null &&
+            call.selectedResponder != null &&
             call.status != 'completed') {
-          // responder.id가 현재 사용자 ID를 포함하는지 확인
-          final isMyMission = call.responder!.id.contains(userId);
+          // selectedResponder.userId가 현재 사용자 ID와 일치하는지 확인
+          final isMyMission = call.selectedResponder!.userId == userId;
 
           if (isMyMission) {
             debugPrint(
@@ -468,10 +484,10 @@ class CallDataService {
         final call = Call.fromMap(entry.key.toString(), entry.value);
 
         if (call.status == 'accepted' &&
-            call.responder != null &&
+            call.selectedResponder != null &&
             call.status != 'completed') {
-          // responder.id가 현재 사용자 ID를 포함하는지 확인
-          final isMyMission = call.responder!.id.contains(userId);
+          // selectedResponder.userId가 현재 사용자 ID와 일치하는지 확인
+          final isMyMission = call.selectedResponder!.userId == userId;
 
           if (isMyMission) {
             debugPrint(

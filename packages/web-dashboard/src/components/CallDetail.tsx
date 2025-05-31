@@ -4,6 +4,7 @@ import CallInfoSection from './call-detail/CallInfoSection';
 import CallTimeSection from './call-detail/CallTimeSection';
 import ResponderInfo from './call-detail/ResponderInfo';
 import CallActionButtons from './call-detail/CallActionButtons';
+import CallCandidatesPanel from './call-detail/CallCandidatesPanel';
 import { Call } from '../services/callService';
 
 interface CallDetailProps {
@@ -72,6 +73,9 @@ const CallDetail: React.FC<CallDetailProps> = ({
           backgroundColor="bg-green-50"
         />
       )}
+      
+      {/* 후보자 목록 (찾는중 상태일 때) */}
+      <CallCandidatesPanel call={call} />
       
       {/* 응답자 정보 */}
       <ResponderInfo responder={call.selectedResponder} />

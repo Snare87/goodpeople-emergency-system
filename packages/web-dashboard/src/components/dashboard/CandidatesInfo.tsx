@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import Badge from '../common/Badge';
 import { POSITION_BADGE_VARIANTS } from '../../constants';
-import { ref, get, set, remove } from 'firebase/database';
+import { ref, get } from 'firebase/database';
 import { db } from '../../firebase';
+import { selectResponder, deselectResponder } from '../../services/callService';
 
 interface Candidate {
   id: string;
@@ -82,29 +83,17 @@ const CandidatesInfo: React.FC<CandidatesInfoProps> = ({
     console.log('[handleSelectCandidate] onSelectCandidate:', !!onSelectCandidate);
     console.log('[handleSelectCandidate] selecting:', selecting);
     
-    if (!onSelectCandidate || selecting) {
-      console.log('[handleSelectCandidate] 조건 미충족으로 종료');
+    if (selecting) {
+      console.log('[handleSelectCandidate] 이미 선택 중이므로 종료');
       return;
     }
     
     try {
       setSelecting(candidate.userId);
       
-      // Firebase에 직접 업데이트
-      console.log('[handleSelectCandidate] Firebase 업데이트 시작');
-      
-      const selectedData = {
-        ...candidate,
-        selectedAt: Date.now()
-      };
-      console.log('[handleSelectCandidate] selectedResponder 데이터:', selectedData);
-      
-      await set(ref(db, `calls/${callId}/selectedResponder`), selectedData);
-      console.log('[handleSelectCandidate] selectedResponder 업데이트 완료');
-      
-      // status를 accepted로 변경
-      await set(ref(db, `calls/${callId}/status`), 'accepted');
-      console.log('[handleSelectCandidate] status 업데이트 완료');
+      // selectResponder 함수 사용
+      console.log('[handleSelectCandidate] selectResponder 호출');
+      await selectResponder(callId, candidate.userId);
       
       // 콜백 호출
       if (onSelectCandidate) {
@@ -126,11 +115,8 @@ const CandidatesInfo: React.FC<CandidatesInfoProps> = ({
     try {
       console.log('[대원 선택 취소] 시작');
       
-      // selectedResponder 제거
-      await remove(ref(db, `calls/${callId}/selectedResponder`));
-      
-      // status를 dispatched로 변경
-      await set(ref(db, `calls/${callId}/status`), 'dispatched');
+      // deselectResponder 함수 사용
+      await deselectResponder(callId);
       
       console.log('[대원 선택 취소] 완료');
       
