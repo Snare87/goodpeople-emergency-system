@@ -44,7 +44,7 @@ const CallActionButtons: React.FC<CallActionButtonsProps> = ({
       )}
       
       {/* 찾는중 상태일 때 호출취소 버튼 표시 */}
-      {call.status === 'dispatched' && !call.responder && (
+      {call.status === 'dispatched' && !call.selectedResponder && (
         <>
           <button 
             className="px-4 py-2 bg-yellow-500 text-white rounded"
@@ -61,8 +61,8 @@ const CallActionButtons: React.FC<CallActionButtonsProps> = ({
         </>
       )}
       
-      {/* 매칭완료 버튼 (responder가 있을 때) */}
-      {call.responder && (
+      {/* 매칭완료 버튼 (selectedResponder가 있을 때) */}
+      {call.selectedResponder && (
         <button 
           className="px-4 py-2 bg-green-500 text-white rounded"
           disabled={true}

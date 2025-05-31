@@ -91,7 +91,7 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
 
   // 대원 실시간 위치 추적
   useEffect(() => {
-    const acceptedCalls = calls.filter(call => call.status === 'accepted' && call.responder);
+    const acceptedCalls = calls.filter(call => call.status === 'accepted' && call.selectedResponder);
     console.log('[GoogleMap] Accepted calls with responders:', acceptedCalls.length);
     const responderListeners: { [key: string]: () => void } = {};
 
@@ -110,8 +110,8 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
     });
 
     acceptedCalls.forEach(call => {
-      if (call.responder?.id && call.location) {
-        const responderRef = ref(db, `calls/${call.id}/responder`);
+      if (call.selectedResponder?.id && call.location) {
+        const responderRef = ref(db, `calls/${call.id}/selectedResponder`);
         
         const unsubscribe = onValue(responderRef, (snapshot) => {
           if (snapshot.exists()) {
@@ -313,11 +313,11 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
         content += `<p style="margin: 5px 0;"><strong>상황:</strong> ${call.info}</p>`;
       }
 
-      if (call.responder) {
+      if (call.selectedResponder) {
         content += `
           <hr style="margin: 10px 0;">
-          <p style="margin: 5px 0;"><strong>담당 대원:</strong> ${call.responder.name}</p>
-          <p style="margin: 5px 0;"><strong>직책:</strong> ${call.responder.position}</p>
+          <p style="margin: 5px 0;"><strong>담당 대원:</strong> ${call.selectedResponder.name}</p>
+          <p style="margin: 5px 0;"><strong>직책:</strong> ${call.selectedResponder.position}</p>
         `;
       }
 

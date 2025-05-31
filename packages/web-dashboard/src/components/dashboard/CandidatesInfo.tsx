@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Badge from '../common/Badge';
 import { POSITION_BADGE_VARIANTS } from '../../constants';
-import { ref, get, set } from 'firebase/database';
+import { ref, get, set, remove } from 'firebase/database';
 import { db } from '../../firebase';
 
 interface Candidate {
@@ -26,17 +26,29 @@ interface CandidatesInfoProps {
   candidates?: Record<string, Candidate>;
   selectedResponder?: any;
   onSelectCandidate?: (callId: string, candidate: Candidate) => void;
+  onCancelSelection?: (callId: string) => void;
 }
 
 const CandidatesInfo: React.FC<CandidatesInfoProps> = ({ 
   callId, 
   candidates, 
   selectedResponder,
-  onSelectCandidate 
+  onSelectCandidate,
+  onCancelSelection 
 }) => {
   const [candidatesCerts, setCandidatesCerts] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [selecting, setSelecting] = useState<string | null>(null);
+  
+  console.log('[CandidatesInfo] 렌더링:', {
+    callId,
+    hasCandidates: !!candidates,
+    candidatesCount: candidates ? Object.keys(candidates).length : 0,
+    hasSelectedResponder: !!selectedResponder,
+    hasOnSelectCandidate: !!onSelectCandidate,
+    selectedResponder: selectedResponder,
+    candidatesKeys: candidates ? Object.keys(candidates) : []
+  });
 
   useEffect(() => {
     const loadCertifications = async () => {
@@ -66,24 +78,39 @@ const CandidatesInfo: React.FC<CandidatesInfoProps> = ({
   }, [candidates]);
 
   const handleSelectCandidate = async (candidate: Candidate) => {
-    if (!onSelectCandidate || selecting) return;
+    console.log('[handleSelectCandidate] 시작:', candidate.name);
+    console.log('[handleSelectCandidate] onSelectCandidate:', !!onSelectCandidate);
+    console.log('[handleSelectCandidate] selecting:', selecting);
+    
+    if (!onSelectCandidate || selecting) {
+      console.log('[handleSelectCandidate] 조건 미충족으로 종료');
+      return;
+    }
     
     try {
       setSelecting(candidate.userId);
       
       // Firebase에 직접 업데이트
-      await set(ref(db, `calls/${callId}/selectedResponder`), {
+      console.log('[handleSelectCandidate] Firebase 업데이트 시작');
+      
+      const selectedData = {
         ...candidate,
         selectedAt: Date.now()
-      });
+      };
+      console.log('[handleSelectCandidate] selectedResponder 데이터:', selectedData);
+      
+      await set(ref(db, `calls/${callId}/selectedResponder`), selectedData);
+      console.log('[handleSelectCandidate] selectedResponder 업데이트 완료');
       
       // status를 accepted로 변경
       await set(ref(db, `calls/${callId}/status`), 'accepted');
+      console.log('[handleSelectCandidate] status 업데이트 완료');
       
       // 콜백 호출
       if (onSelectCandidate) {
         onSelectCandidate(callId, candidate);
       }
+      console.log('[handleSelectCandidate] 전체 프로세스 완료');
     } catch (error) {
       console.error('대원 선택 실패:', error);
       alert('대원 선택에 실패했습니다.');
@@ -92,102 +119,110 @@ const CandidatesInfo: React.FC<CandidatesInfoProps> = ({
     }
   };
 
-  // 이미 선택된 대원이 있는 경우
-  if (selectedResponder) {
-    const certs = candidatesCerts[selectedResponder.userId] || [];
-    const badgeVariant = POSITION_BADGE_VARIANTS[selectedResponder.position] || 'default';
+  // 대원 선택 취소 함수
+  const handleCancelSelection = async () => {
+    if (!onCancelSelection) return;
     
-    return (
-      <div className="bg-white p-6 rounded-lg shadow-sm w-full h-full flex flex-col">
-        {/* 상단: 대원 정보 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <Badge variant={badgeVariant as any} size="md">
-              {selectedResponder.position || '대원'}
-            </Badge>
-            <span className="text-lg font-medium">
-              {selectedResponder.rank || '소방사'}
-            </span>
-            <span className="text-lg font-medium">
-              {selectedResponder.name}
-            </span>
-          </div>
-          <Badge variant="success" size="md">배정됨</Badge>
-        </div>
-        
-        {/* 경로 정보 */}
-        {selectedResponder.routeInfo && (
-          <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold text-green-800">
-                🗺️ 예상 도착 정보 (T맵)
-              </h4>
-              <Badge variant="success" size="sm">
-                최종 선택됨
+    try {
+      console.log('[대원 선택 취소] 시작');
+      
+      // selectedResponder 제거
+      await remove(ref(db, `calls/${callId}/selectedResponder`));
+      
+      // status를 dispatched로 변경
+      await set(ref(db, `calls/${callId}/status`), 'dispatched');
+      
+      console.log('[대원 선택 취소] 완료');
+      
+      if (onCancelSelection) {
+        onCancelSelection(callId);
+      }
+    } catch (error) {
+      console.error('대원 선택 취소 실패:', error);
+      alert('대원 선택 취소에 실패했습니다.');
+    }
+  };
+
+  // 전체 UI 렌더링
+  return (
+    <div className="bg-white p-6 rounded-lg shadow-sm w-full h-full flex flex-col">
+      {/* 선택된 대원이 있는 경우 */}
+      {selectedResponder && (
+        <div className="mb-4 p-4 bg-green-50 rounded-lg border-2 border-green-300">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-3">
+              <Badge variant={POSITION_BADGE_VARIANTS[selectedResponder.position] || 'default' as any} size="md">
+                {selectedResponder.position || '대원'}
               </Badge>
+              <span className="text-lg font-medium">
+                {selectedResponder.rank || '소방사'} {selectedResponder.name}
+              </span>
+              <Badge variant="success" size="sm">배정된 대원</Badge>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            {onCancelSelection && (
+              <button
+                onClick={handleCancelSelection}
+                className="px-3 py-1 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+              >
+                선택 취소
+              </button>
+            )}
+          </div>
+          
+          {/* 경로 정보 */}
+          {selectedResponder.routeInfo && (
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div className="bg-white p-2 rounded">
                 <p className="text-xs text-gray-600">거리</p>
-                <p className="text-lg font-bold text-green-900">
+                <p className="font-bold text-green-900">
                   {selectedResponder.routeInfo.distanceText}
                 </p>
               </div>
-              <div>
+              <div className="bg-white p-2 rounded">
                 <p className="text-xs text-gray-600">예상 시간</p>
-                <p className="text-lg font-bold text-green-900">
+                <p className="font-bold text-green-900">
                   {selectedResponder.routeInfo.durationText}
                 </p>
               </div>
             </div>
-          </div>
-        )}
-        
-        {/* 자격증 정보 */}
-        <div className="flex-1">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">보유 자격증</h4>
-          {certs.length > 0 ? (
-            <div className="space-y-2">
-              {certs.map((cert, index) => (
-                <div 
-                  key={index} 
-                  className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium"
-                >
-                  {cert}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-sm text-gray-400">자격증 정보 없음</div>
           )}
         </div>
-      </div>
-    );
-  }
-
-  // 후보자가 없는 경우
-  if (!candidates || Object.keys(candidates).length === 0) {
-    return (
-      <div className="bg-white p-6 rounded-lg shadow-sm w-full flex flex-col items-center justify-center h-full">
-        <p className="text-base text-gray-500">수락한 대원이 없습니다</p>
-      </div>
-    );
-  }
-
-  // 후보자 목록 표시
-  const candidatesList = Object.values(candidates);
-  
-  return (
-    <div className="bg-white p-6 rounded-lg shadow-sm w-full h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4">
-        <h4 className="text-lg font-semibold">후보자 목록</h4>
-        <Badge variant="info" size="sm">
-          {candidatesList.length}명 대기중
-        </Badge>
-      </div>
+      )}
       
-      <div className="flex-1 overflow-y-auto space-y-3">
-        {candidatesList
+      {/* 후보자 목록 헤더 */}
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="text-lg font-semibold">
+          {selectedResponder ? '추가 후보자' : '후보자 목록'}
+        </h4>
+        {candidates && Object.keys(candidates).length > 0 && (
+          <Badge variant="info" size="sm">
+            {selectedResponder 
+              ? Object.keys(candidates).length - 1  // 선택된 대원 제외
+              : Object.keys(candidates).length
+            }명 대기중
+          </Badge>
+        )}
+      </div>
+
+      {/* 후보자가 없거나 선택된 대원만 있는 경우 */}
+      {(!candidates || Object.keys(candidates).length === 0 || 
+        (selectedResponder && Object.keys(candidates).length === 1 && candidates[selectedResponder.userId])) ? (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-base text-gray-500">
+            {selectedResponder ? '추가 후보자가 없습니다' : '수락한 대원이 없습니다'}
+          </p>
+        </div>
+      ) : (
+        /* 후보자 목록 */
+        <div className="flex-1 overflow-y-auto space-y-3">
+        {Object.values(candidates)
+          .filter(candidate => {
+            // 선택된 대원은 후보자 목록에서 제외
+            const shouldExclude = selectedResponder && candidate.userId === selectedResponder.userId;
+            console.log('[필터링]', candidate.name, 'userId:', candidate.userId, 
+              'selectedResponder userId:', selectedResponder?.userId, '제외?:', shouldExclude);
+            return !shouldExclude;
+          })
           .sort((a, b) => {
             // 거리순으로 정렬 (가까운 순)
             const distA = a.routeInfo?.distance || Infinity;
@@ -215,7 +250,11 @@ const CandidatesInfo: React.FC<CandidatesInfoProps> = ({
                     </span>
                   </div>
                   <button
-                    onClick={() => handleSelectCandidate(candidate)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log('[버튼 클릭] 후보자:', candidate.name);
+                      handleSelectCandidate(candidate);
+                    }}
                     disabled={isSelecting}
                     className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                       isSelecting 
@@ -270,7 +309,8 @@ const CandidatesInfo: React.FC<CandidatesInfoProps> = ({
               </div>
             );
           })}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

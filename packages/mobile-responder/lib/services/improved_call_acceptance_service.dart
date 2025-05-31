@@ -44,27 +44,23 @@ class ImprovedCallAcceptanceService {
         'name': userData['name'] ?? '대원',
         'position': userData['position'] ?? '대원',
         'rank': userData['rank'] ?? '소방사',
-        'certifications': userData['certifications'] ?? [],
+        'acceptedAt': DateTime.now().millisecondsSinceEpoch,
         
-        // 거리 정보
-        'straightDistance': straightDistance.round(),
-        'actualDistance': directionsResult?.totalDistance ?? straightDistance.round(),
-        'actualDistanceText': directionsResult?.distanceText ?? '${(straightDistance/1000).toStringAsFixed(1)}km',
+        // 경로 정보 (routeInfo 객체로 통일)
+        'routeInfo': {
+          'distance': directionsResult?.totalDistance ?? straightDistance.round(),
+          'distanceText': directionsResult?.distanceText ?? '${(straightDistance/1000).toStringAsFixed(1)}km',
+          'duration': directionsResult?.totalDuration ?? (straightDistance / 50).round() * 60, // 초 단위로 통일
+          'durationText': directionsResult?.durationText ?? '${(straightDistance / 50).round()}분',
+          'calculatedAt': DateTime.now().millisecondsSinceEpoch,
+          'routeApiUsed': directionsResult != null ? 'google' : 'straight',
+        },
         
-        // 시간 정보
-        'estimatedArrival': directionsResult?.totalDuration ?? (straightDistance / 50).round(),
-        'estimatedArrivalText': directionsResult?.durationText ?? '${(straightDistance / 50).round()}분',
-        
-        // 경로 정보
-        'routeApiUsed': directionsResult != null ? 'google' : 'straight',
-        
-        // 위치 정보
+        // 현재 위치 (별도 필드로 유지)
         'currentLocation': {
           'lat': userPosition.latitude,
           'lng': userPosition.longitude,
         },
-        
-        'acceptedAt': DateTime.now().millisecondsSinceEpoch,
       };
       
       // 5. Firebase Transaction으로 안전하게 추가
@@ -89,14 +85,21 @@ class ImprovedCallAcceptanceService {
           return Transaction.abort();
         }
         
+        // 후보자 추가 (객체 형태로)
+        if (callMap['candidates'] == null) {
+          callMap['candidates'] = {};
+        }
+        
+        final candidates = Map<String, dynamic>.from(callMap['candidates'] as Map? ?? {});
+        
         // 이미 후보자인지 확인
-        final candidates = List<Map>.from(callMap['candidates'] ?? []);
-        if (candidates.any((c) => c['userId'] == userId)) {
+        if (candidates.containsKey(userId)) {
           return Transaction.abort();
         }
         
         // 후보자 추가
-        callMap['candidates'] = [...candidates, candidateData];
+        candidates[userId] = candidateData;
+        callMap['candidates'] = candidates;
         return Transaction.success(callMap);
       });
       
@@ -136,7 +139,8 @@ class ImprovedCallAcceptanceService {
       final data = Map<String, dynamic>.from(event.snapshot.value as Map);
       
       // 선정된 대원 확인
-      if (data['selectedResponderId'] == userId) {
+      final selectedResponder = data['selectedResponder'] as Map<String, dynamic>?;
+      if (selectedResponder != null && selectedResponder['userId'] == userId) {
         return CandidateStatus(
           status: SelectionStatus.selected,
           message: '축하합니다! 이 임무에 선정되었습니다.',
@@ -144,22 +148,16 @@ class ImprovedCallAcceptanceService {
       }
       
       // 다른 대원이 선정됨
-      if (data['selectedResponderId'] != null) {
-        final selectedCandidate = (data['candidates'] as List?)
-            ?.firstWhere(
-              (c) => c['userId'] == data['selectedResponderId'],
-              orElse: () => null,
-            );
-        
+      if (selectedResponder != null) {
         return CandidateStatus(
           status: SelectionStatus.notSelected,
-          message: '${selectedCandidate?['name'] ?? '다른 대원'}님이 선정되었습니다.',
-          selectedCandidateName: selectedCandidate?['name'],
+          message: '${selectedResponder['name'] ?? '다른 대원'}님이 선정되었습니다.',
+          selectedCandidateName: selectedResponder['name'],
         );
       }
       
       // 아직 대기 중
-      final candidates = List<Map>.from(data['candidates'] ?? []);
+      final candidates = Map<String, dynamic>.from(data['candidates'] ?? {});
       return CandidateStatus(
         status: SelectionStatus.waiting,
         message: '선정 대기 중... (총 ${candidates.length}명 후보)',
@@ -171,7 +169,7 @@ class ImprovedCallAcceptanceService {
   // 실시간 경로 업데이트
   static Future<void> updateRouteInfo(
     String callId,
-    String candidateId,
+    String userId,  // candidateId 대신 userId 사용
   ) async {
     try {
       final position = await Geolocator.getCurrentPosition();
@@ -189,12 +187,16 @@ class ImprovedCallAcceptanceService {
       );
       
       if (directions != null) {
-        // Firebase 업데이트
-        await _db.ref('calls/$callId/candidates/$candidateId').update({
-          'actualDistance': directions.totalDistance,
-          'actualDistanceText': directions.distanceText,
-          'estimatedArrival': directions.totalDuration,
-          'estimatedArrivalText': directions.durationText,
+        // Firebase 업데이트 - routeInfo 객체로 통일
+        await _db.ref('calls/$callId/candidates/$userId').update({
+          'routeInfo': {
+            'distance': directions.totalDistance,
+            'distanceText': directions.distanceText,
+            'duration': directions.totalDuration,
+            'durationText': directions.durationText,
+            'calculatedAt': DateTime.now().millisecondsSinceEpoch,
+            'routeApiUsed': 'google',
+          },
           'currentLocation': {
             'lat': position.latitude,
             'lng': position.longitude,

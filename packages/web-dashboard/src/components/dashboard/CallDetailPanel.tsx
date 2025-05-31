@@ -78,6 +78,14 @@ const CallDetailPanel: React.FC<CallDetailPanelProps> = ({
               callId={call.id}
               candidates={call.candidates} 
               selectedResponder={call.selectedResponder}
+              onSelectCandidate={(callId, candidate) => {
+                console.log('후보자 선택됨:', candidate.name);
+                // Firebase 업데이트는 CandidatesInfo 내부에서 처리됨
+              }}
+              onCancelSelection={(callId) => {
+                console.log('대원 선택 취소됨');
+                // Firebase 업데이트는 CandidatesInfo 내부에서 처리됨
+              }}
             />
           </div>
         </div>

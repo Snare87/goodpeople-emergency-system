@@ -13,9 +13,11 @@ export interface FirebaseCall {
   status: string;
   startAt: Timestamp | string;
   completedAt?: Timestamp | string;
-  responder?: string;
+  acceptedAt?: Timestamp | string;
   info?: string;
   reporterId?: string;
+  candidates?: Record<string, any>;
+  selectedResponder?: any;
 }
 
 // Firebase User 타입

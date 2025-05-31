@@ -1,0 +1,58 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "$uid === auth.uid || root.child('users').child(auth.uid).child('roles').child('0').val() === 'admin'"
+      }
+    },
+    "calls": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$callId": {
+        "responder": {
+          ".write": "auth != null"
+        },
+        "status": {
+          ".write": "auth != null"
+        },
+        "acceptedAt": {
+          ".write": "auth != null"
+        },
+        "candidates": {
+          ".write": "auth != null",
+          "$userId": {
+            ".write": "$userId === auth.uid || root.child('users').child(auth.uid).child('roles').child('0').val() === 'admin' || root.child('users').child(auth.uid).child('roles').child('0').val() === 'supervisor'"
+          }
+        },
+        "selectedResponder": {
+          ".write": "root.child('users').child(auth.uid).child('roles').child('0').val() === 'admin' || root.child('users').child(auth.uid).child('roles').child('0').val() === 'supervisor' || root.child('users').child(auth.uid).child('roles').child('0').val() === 'dispatcher'"
+        }
+      }
+    },
+    "notification_logs": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "emergencies": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "responders": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "locations": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "backups": {
+      ".read": "root.child('users').child(auth.uid).child('roles').child('0').val() === 'admin'",
+      ".write": "root.child('users').child(auth.uid).child('roles').child('0').val() === 'admin'"
+    }
+  }
+}

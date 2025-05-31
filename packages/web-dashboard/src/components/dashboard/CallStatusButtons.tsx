@@ -20,7 +20,7 @@ const CallStatusButtons: React.FC<CallStatusButtonsProps> = ({
 }) => {
   if (!call) return null;
 
-  const { status, responder } = call;
+  const { status, selectedResponder } = call;
 
   // 완료된 재난
   if (status === CALL_STATUS.COMPLETED) {
@@ -48,7 +48,7 @@ const CallStatusButtons: React.FC<CallStatusButtonsProps> = ({
       )}
       
       {/* 찾는중 상태 */}
-      {status === CALL_STATUS.DISPATCHED && !responder && (
+      {status === CALL_STATUS.DISPATCHED && !selectedResponder && (
         <>
           <button 
             className="px-4 py-2 bg-yellow-500 text-white rounded"
@@ -66,7 +66,7 @@ const CallStatusButtons: React.FC<CallStatusButtonsProps> = ({
       )}
       
       {/* 매칭완료 상태 */}
-      {responder && (
+      {selectedResponder && (
         <button 
           className="px-4 py-2 bg-green-500 text-white rounded"
           disabled={true}

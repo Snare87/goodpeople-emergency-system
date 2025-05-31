@@ -89,8 +89,30 @@ const CallListItem = memo<CallListItemProps>(({
           {!showCompletedInfo ? (
             // 활성 재난 버튼
             <>
-              {call.responder ? (
-                <Badge variant="success">매칭완료</Badge>
+              {call.selectedResponder ? (
+                <div className="flex flex-col gap-1">
+                  <Badge variant="success">매칭완료</Badge>
+                  {onCancel && (
+                    <button
+                      className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                      onClick={(e) => handleClick(e, onCancel)}
+                    >
+                      취소
+                    </button>
+                  )}
+                </div>
+              ) : call.status === 'accepted' ? (
+                <div className="flex flex-col gap-1">
+                  <Badge variant="success">배정완료</Badge>
+                  {onCancel && (
+                    <button
+                      className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                      onClick={(e) => handleClick(e, onCancel)}
+                    >
+                      취소
+                    </button>
+                  )}
+                </div>
               ) : call.status === 'dispatched' ? (
                 <div className="flex flex-col gap-1">
                   <Badge variant="warning">찾는중</Badge>

@@ -21,6 +21,7 @@
     "concurrently": "^7.6.0"
   },
   "dependencies": {
+    "firebase-admin": "^13.4.0",
     "goodpeople-emergency-system": "file:"
   }
 }

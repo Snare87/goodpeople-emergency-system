@@ -1,9 +1,9 @@
 // src/services/callService.ts
-import { ref, onValue, off, update, get, runTransaction, Unsubscribe } from 'firebase/database';
+import { ref, onValue, off, update, get, runTransaction, remove, Unsubscribe } from 'firebase/database';
 import { db, auth } from '../firebase';
 import { FirebaseCall } from '../types/firebase';
 
-// Call 타입 정의
+// Call 타입 정의 - 새로운 다중 후보자 시스템
 export interface Call {
   id: string;
   eventType: string;
@@ -23,13 +23,7 @@ export interface Call {
   reactivationCount?: number;
   info?: string;
   reporterId?: string;
-  responder?: {
-    id: string;
-    name: string;
-    position: string;
-    rank?: string;
-  };
-  // 다중 후보자 시스템을 위한 필드
+  // 다중 후보자 시스템 필드
   candidates?: Record<string, {
     id: string;
     userId: string;
@@ -117,11 +111,9 @@ export const dispatchCall = (id: string): Promise<void> => {
   });
 };
 
-// 대원 수락 - Transaction을 사용한 개선된 버전
+// 대원 수락 - 새로운 다중 후보자 시스템으로 수정
 export const acceptCall = async (
-  id: string, 
-  responderId: string = 'resp1', 
-  responderName: string = '김구조'
+  id: string
 ): Promise<void> => {
   try {
     // 현재 로그인한 사용자 정보 가져오기
@@ -130,22 +122,13 @@ export const acceptCall = async (
       throw new Error('로그인한 사용자가 없습니다.');
     }
     
-    // 사용자 데이터 먼저 가져오기
+    // 사용자 데이터 가져오기
     const userSnapshot = await get(ref(db, `users/${currentUser.uid}`));
-    let userData = {
-      name: responderName,
-      position: '대원',
-      rank: '소방사'
-    };
-    
-    if (userSnapshot.exists()) {
-      const data = userSnapshot.val();
-      userData = {
-        name: data.name || responderName,
-        position: data.position || '대원',
-        rank: data.rank || '소방사'
-      };
+    if (!userSnapshot.exists()) {
+      throw new Error('사용자 정보가 없습니다.');
     }
+    
+    const userData = userSnapshot.val();
     
     // Transaction을 사용한 원자적 업데이트
     const callRef = ref(db, `calls/${id}`);
@@ -160,19 +143,24 @@ export const acceptCall = async (
         return; // Transaction abort
       }
       
-      // 이미 다른 대원이 수락했으면 취소
-      if (currentData.responder) {
-        return; // Transaction abort
+      // 후보자 정보 추가
+      if (!currentData.candidates) {
+        currentData.candidates = {};
       }
       
-      // 모든 조건 통과 - 수락 처리
-      currentData.status = 'accepted';
-      currentData.acceptedAt = Date.now();
-      currentData.responder = {
-        id: `resp_${currentUser.uid}_${Date.now()}`,
-        name: userData.name,
-        position: userData.position,
-        rank: userData.rank
+      // 이미 등록된 후보자인지 확인
+      if (currentData.candidates[currentUser.uid]) {
+        return; // 이미 수락한 경우
+      }
+      
+      // 후보자로 추가
+      currentData.candidates[currentUser.uid] = {
+        id: currentUser.uid,
+        userId: currentUser.uid,
+        name: userData.name || '대원',
+        position: userData.position || '대원',
+        rank: userData.rank || '소방사',
+        acceptedAt: Date.now()
       };
       
       return currentData;
@@ -186,14 +174,18 @@ export const acceptCall = async (
         const latestData = latestSnapshot.val();
         if (latestData.status === 'idle') {
           throw new Error('호출이 취소된 재난입니다.');
-        } else if (latestData.status === 'accepted' && latestData.responder) {
-          throw new Error(`${latestData.responder.name}님이 이미 이 재난을 수락했습니다.`);
+        } else if (latestData.status === 'accepted') {
+          throw new Error('이미 대원이 배정된 재난입니다.');
         } else if (latestData.status === 'completed') {
           throw new Error('이미 종료된 재난입니다.');
+        } else if (latestData.candidates && latestData.candidates[currentUser.uid]) {
+          throw new Error('이미 수락한 재난입니다.');
         }
       }
       throw new Error('수락할 수 없는 재난입니다.');
     }
+    
+    console.log('[대원 수락] 성공:', userData.name);
     
   } catch (error) {
     console.error('콜 수락 오류:', error);
@@ -202,17 +194,38 @@ export const acceptCall = async (
 };
 
 // 완료 처리
-export const completeCall = (id: string): Promise<void> => {
-  return update(ref(db, `calls/${id}`), { 
-    status: 'completed', 
-    completedAt: Date.now(),
-    responder: null,  // responder 정보 제거
-    acceptedAt: null  // 수락 시간도 초기화
-  });
+export const completeCall = async (id: string): Promise<void> => {
+  console.log('[completeCall] 시작:', id);
+  try {
+    // 먼저 기본 필드 업데이트
+    await update(ref(db, `calls/${id}`), { 
+      status: 'completed', 
+      completedAt: Date.now()
+    });
+    
+    // 명시적으로 필드 삭제 (candidates는 유지)
+    const fieldsToRemove = [
+      'acceptedAt', 
+      'selectedResponder'
+    ];
+    
+    await Promise.all(
+      fieldsToRemove.map(field => 
+        remove(ref(db, `calls/${id}/${field}`))
+          .catch(() => {}) // 필드가 없어도 에러 방지
+      )
+    );
+    
+    console.log('[completeCall] 업데이트 성공');
+  } catch (error) {
+    console.error('[completeCall] 업데이트 실패:', error);
+    throw error;
+  }
 };
 
 // 호출 취소 - Transaction 적용
 export const cancelCall = async (id: string): Promise<void> => {
+  console.log('[cancelCall] 시작:', id);
   const callRef = ref(db, `calls/${id}`);
   
   const result = await runTransaction(callRef, (currentData) => {
@@ -220,45 +233,75 @@ export const cancelCall = async (id: string): Promise<void> => {
       return; // Transaction abort
     }
     
-    // dispatched 상태이고 responder가 없을 때만 취소 가능
-    if (currentData.status === 'dispatched' && !currentData.responder) {
+    // dispatched 또는 accepted 상태일 때 취소 가능
+    if (currentData.status === 'dispatched' || currentData.status === 'accepted') {
       const currentCancellationCount = currentData.cancellationCount || 0;
       
-      currentData.status = 'idle';
-      currentData.dispatchedAt = null;
-      currentData.acceptedAt = null;
-      currentData.responder = null;
-      currentData.cancelledAt = Date.now();
-      currentData.cancellationCount = currentCancellationCount + 1;
+      // 새로운 객체 생성 (필요한 필드만 포함)
+      const updatedData = {
+        ...currentData,
+        status: 'idle',
+        cancelledAt: Date.now(),
+        cancellationCount: currentCancellationCount + 1
+      };
       
-      return currentData;
+      // 삭제할 필드들 (호출취소 시 모든 대원 정보 삭제)
+      delete updatedData.dispatchedAt;
+      delete updatedData.acceptedAt;
+      delete updatedData.selectedResponder;
+      delete updatedData.candidates;
+      
+      return updatedData;
     }
     
     return; // Transaction abort
   });
   
   if (!result.committed) {
+    console.error('[cancelCall] Transaction 실패');
     throw new Error('취소할 수 없는 상태입니다.');
   }
+  console.log('[cancelCall] 취소 성공');
 };
 
 // 재호출 (수정된 버전)
-export const reactivateCall = (id: string): Promise<void> => {
-  return get(ref(db, `calls/${id}`)).then(snapshot => {
-    if (snapshot.exists()) {
-      const callData = snapshot.val() as Call;
-      const currentReactivationCount = callData.reactivationCount || 0;
-      
-      return update(ref(db, `calls/${id}`), { 
-        status: 'dispatched',
-        completedAt: null,
-        dispatchedAt: Date.now(),
-        acceptedAt: null,
-        responder: null,
-        reactivatedAt: Date.now(),
-        reactivationCount: currentReactivationCount + 1
-      });
+export const reactivateCall = async (id: string): Promise<void> => {
+  console.log('[reactivateCall] 시작:', id);
+  try {
+    const snapshot = await get(ref(db, `calls/${id}`));
+    if (!snapshot.exists()) {
+      throw new Error('Call not found');
     }
-    throw new Error('Call not found');
-  });
+    
+    const callData = snapshot.val() as Call;
+    const currentReactivationCount = callData.reactivationCount || 0;
+    
+    // 기본 필드 업데이트
+    await update(ref(db, `calls/${id}`), { 
+      status: 'dispatched',
+      dispatchedAt: Date.now(),
+      reactivatedAt: Date.now(),
+      reactivationCount: currentReactivationCount + 1
+    });
+    
+    // 명시적으로 필드 삭제 (재호출 시 새로 시작)
+    const fieldsToRemove = [
+      'completedAt',
+      'acceptedAt',
+      'selectedResponder',
+      'candidates'  // 재호출 시 기존 후보자 목록 초기화
+    ];
+    
+    await Promise.all(
+      fieldsToRemove.map(field => 
+        remove(ref(db, `calls/${id}/${field}`))
+          .catch(() => {}) // 필드가 없어도 에러 방지
+      )
+    );
+    
+    console.log('[reactivateCall] 재호출 성공');
+  } catch (error) {
+    console.error('[reactivateCall] 실패:', error);
+    throw error;
+  }
 };

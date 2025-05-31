@@ -74,7 +74,7 @@ const CallDetail: React.FC<CallDetailProps> = ({
       )}
       
       {/* 응답자 정보 */}
-      <ResponderInfo responder={call.responder} />
+      <ResponderInfo responder={call.selectedResponder} />
       
       {/* 액션 버튼들 */}
       <CallActionButtons
