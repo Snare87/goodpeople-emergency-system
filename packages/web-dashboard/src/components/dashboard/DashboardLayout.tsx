@@ -52,8 +52,20 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // 지도
   mapCenter
 }) => {
+  const [moveToLocation, setMoveToLocation] = React.useState<{ lat: number; lng: number; zoom?: number } | null>(null);
+  
+  const handleCandidateClick = (lat: number, lng: number) => {
+    setMoveToLocation({ lat, lng, zoom: 15 });
+  };
+  
   // 디버깅 로그
   console.log('[DashboardLayout] selectedCallId:', selectedCallId, 'mapCenter:', mapCenter);
+  console.log('[DashboardLayout] selectedCall:', selectedCall ? {
+    id: selectedCall.id,
+    eventType: selectedCall.eventType,
+    status: selectedCall.status,
+    candidatesCount: selectedCall.candidates ? Object.keys(selectedCall.candidates).length : 0
+  } : null);
   const listTabs = [
     { key: 'active', label: '재난 목록' },
     { key: 'completed', label: '완료 목록' }
@@ -99,11 +111,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <div className="h-[45%]">
           <Card className="h-full">
             <CallDetailPanel
+              key={selectedCall?.id || 'empty'}  // key 추가로 컴포넌트 재사용 방지
               call={selectedCall}
               onDispatch={dispatchCall}
               onComplete={completeCall}
               onReactivate={reactivateCall}
               onCancel={cancelCall}
+              onCandidateClick={handleCandidateClick}
             />
           </Card>
         </div>
@@ -111,7 +125,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* 지도 */}
         <div className="h-[55%]">
           <div className="bg-white rounded-lg shadow h-full relative overflow-hidden">
-            <GoogleMap calls={activeCalls} center={mapCenter} selectedCallId={selectedCallId || undefined} />
+            <GoogleMap 
+              calls={activeCalls} 
+              center={mapCenter} 
+              selectedCallId={selectedCallId || undefined}
+              moveToLocation={moveToLocation}
+            />
           </div>
         </div>
       </div>

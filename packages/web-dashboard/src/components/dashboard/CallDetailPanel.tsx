@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import EmptyState from '../common/EmptyState';
 import CallStatusButtons from './CallStatusButtons';
 import DispatchInfoCard from './DispatchInfoCard';
-import CandidatesInfo from './CandidatesInfo';
+import EnhancedCandidatesInfo from './EnhancedCandidatesInfo';
 import SituationInfo from './SituationInfo';
 import { Call } from '../../services/callService';
 
@@ -13,6 +13,7 @@ interface CallDetailPanelProps {
   onComplete: (id: string) => Promise<void>;
   onReactivate: (id: string) => Promise<void>;
   onCancel: (id: string) => Promise<void>;
+  onCandidateClick?: (lat: number, lng: number) => void;
 }
 
 const CallDetailPanel: React.FC<CallDetailPanelProps> = ({ 
@@ -20,7 +21,8 @@ const CallDetailPanel: React.FC<CallDetailPanelProps> = ({
   onDispatch, 
   onComplete, 
   onReactivate, 
-  onCancel 
+  onCancel,
+  onCandidateClick 
 }) => {
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
@@ -74,18 +76,21 @@ const CallDetailPanel: React.FC<CallDetailPanelProps> = ({
             {call.selectedResponder ? '배정된 대원' : '후보자 목록'}
           </h3>
           <div className="flex-1">
-            <CandidatesInfo 
+            <EnhancedCandidatesInfo 
+              key={`${call.id}-candidates`}  // key 추가로 컴포넌트 재사용 방지
+              call={call}
               callId={call.id}
-              candidates={call.candidates} 
+              candidates={call.candidates}
               selectedResponder={call.selectedResponder}
               onSelectCandidate={(callId, candidate) => {
                 console.log('후보자 선택됨:', candidate.name);
-                // Firebase 업데이트는 CandidatesInfo 내부에서 처리됨
+                // Firebase 업데이트는 EnhancedCandidatesInfo 내부에서 처리됨
               }}
               onCancelSelection={(callId) => {
                 console.log('대원 선택 취소됨');
-                // Firebase 업데이트는 CandidatesInfo 내부에서 처리됨
+                // Firebase 업데이트는 EnhancedCandidatesInfo 내부에서 처리됨
               }}
+              onCandidateClick={onCandidateClick}
             />
           </div>
         </div>

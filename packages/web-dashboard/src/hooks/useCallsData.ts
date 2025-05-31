@@ -18,7 +18,11 @@ export default function useCallsData(): UseCallsDataReturn {
   // 데이터베이스 리스너 설정
   useEffect(() => {
     const unsubscribe = subscribeToCalls((calls) => {
-      console.log('[useCallsData] Received calls from Firebase:', calls);
+      console.log('[useCallsData] Received calls from Firebase:', calls.map(c => ({
+        id: c.id,
+        eventType: c.eventType,
+        candidatesCount: c.candidates ? Object.keys(c.candidates).length : 0
+      })));
       setAllCalls(calls);
     });
     
@@ -45,7 +49,13 @@ export default function useCallsData(): UseCallsDataReturn {
   // 선택된 콜 찾기
   const selectedCall = useMemo(() => {
     if (!selectedCallId) return null;
-    return allCalls.find(call => call.id === selectedCallId) || null;
+    const foundCall = allCalls.find(call => call.id === selectedCallId) || null;
+    console.log('[useCallsData] selectedCall updated:', foundCall ? {
+      id: foundCall.id,
+      eventType: foundCall.eventType,
+      candidatesCount: foundCall.candidates ? Object.keys(foundCall.candidates).length : 0
+    } : null);
+    return foundCall;
   }, [allCalls, selectedCallId]);
   
   // 콜 선택 핸들러

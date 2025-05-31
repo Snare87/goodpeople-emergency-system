@@ -4,7 +4,7 @@ import CallInfoSection from './call-detail/CallInfoSection';
 import CallTimeSection from './call-detail/CallTimeSection';
 import ResponderInfo from './call-detail/ResponderInfo';
 import CallActionButtons from './call-detail/CallActionButtons';
-import CallCandidatesPanel from './call-detail/CallCandidatesPanel';
+import EnhancedCandidatesPanel from './call-detail/EnhancedCandidatesPanel';
 import { Call } from '../services/callService';
 
 interface CallDetailProps {
@@ -13,6 +13,7 @@ interface CallDetailProps {
   onComplete: (id: string) => Promise<void>;
   onReactivate: (id: string) => Promise<void>;
   onCancel: (id: string) => Promise<void>;
+  onCandidateClick?: (lat: number, lng: number) => void;
 }
 
 const CallDetail: React.FC<CallDetailProps> = ({ 
@@ -20,10 +21,18 @@ const CallDetail: React.FC<CallDetailProps> = ({
   onDispatch, 
   onComplete, 
   onReactivate, 
-  onCancel 
+  onCancel,
+  onCandidateClick 
 }) => {
   // 실시간 갱신을 위한 타이머 상태 추가 (CallsList와 동일한 방식)
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  
+  // 디버깅: call 변경 시 로깅
+  useEffect(() => {
+    if (call) {
+      console.log(`[CallDetail] Displaying call ${call.id} - ${call.eventType}, candidates: ${call.candidates ? Object.keys(call.candidates).length : 0}`);
+    }
+  }, [call]);
   
   // 타이머 간격을 3초로 설정 (CallsList와 동일)
   useEffect(() => {
@@ -75,7 +84,10 @@ const CallDetail: React.FC<CallDetailProps> = ({
       )}
       
       {/* 후보자 목록 (찾는중 상태일 때) */}
-      <CallCandidatesPanel call={call} />
+      <EnhancedCandidatesPanel 
+        call={call} 
+        onCandidateClick={onCandidateClick}
+      />
       
       {/* 응답자 정보 */}
       <ResponderInfo responder={call.selectedResponder} />

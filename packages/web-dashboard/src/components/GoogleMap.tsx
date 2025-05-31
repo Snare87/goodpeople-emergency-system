@@ -56,9 +56,10 @@ interface GoogleMapProps {
   calls: Call[];
   center: [number, number];
   selectedCallId?: string;
+  moveToLocation?: { lat: number; lng: number; zoom?: number } | null;
 }
 
-export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapProps) {
+export default function GoogleMap({ calls, center, selectedCallId, moveToLocation }: GoogleMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
@@ -66,6 +67,7 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
   const polylinesRef = useRef<Map<string, any>>(new Map());
   const [responders, setResponders] = useState<Map<string, ResponderWithMission>>(new Map());
   const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [lastMoveLocation, setLastMoveLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // 디버깅 로그
   console.log('[GoogleMap] Render - calls:', calls.length, 'selectedCallId:', selectedCallId, 'mapsLoaded:', mapsLoaded);
@@ -226,6 +228,35 @@ export default function GoogleMap({ calls, center, selectedCallId }: GoogleMapPr
       }
     });
   }, [responders, mapsLoaded]);
+
+  // moveToLocation prop에 따른 지도 이동
+  useEffect(() => {
+    if (!googleMapRef.current || !window.google || !mapsLoaded || !moveToLocation) return;
+    
+    // 동일한 위치로의 중복 이동 방지
+    if (lastMoveLocation && 
+        lastMoveLocation.lat === moveToLocation.lat && 
+        lastMoveLocation.lng === moveToLocation.lng) {
+      return;
+    }
+    
+    const { maps } = window.google;
+    const newCenter = new maps.LatLng(moveToLocation.lat, moveToLocation.lng);
+    
+    // panTo로 부드럽게 이동
+    googleMapRef.current.panTo(newCenter);
+    
+    // 줌 레벨 설정 (기본값 15)
+    if (moveToLocation.zoom) {
+      googleMapRef.current.setZoom(moveToLocation.zoom);
+    } else {
+      googleMapRef.current.setZoom(15);
+    }
+    
+    setLastMoveLocation({ lat: moveToLocation.lat, lng: moveToLocation.lng });
+    
+    console.log('[GoogleMap] Moved to location:', moveToLocation);
+  }, [moveToLocation, mapsLoaded, lastMoveLocation]);
 
   // 맵 초기화 및 재난 마커 표시
   useEffect(() => {

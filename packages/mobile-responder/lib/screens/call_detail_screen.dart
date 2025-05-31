@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:goodpeople_responder/services/call_data_service.dart';
 import 'package:goodpeople_responder/services/directions_service.dart';
+import 'package:goodpeople_responder/services/improved_call_acceptance_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'active_mission_screen.dart';
 import 'package:goodpeople_responder/screens/navigation_screen.dart';
@@ -48,9 +49,12 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCallDetails();
-    _getCurrentPosition();
-    _listenToCallChanges();
+    // 무거운 작업들을 Future.delayed로 분산
+    Future.delayed(Duration.zero, () {
+      _loadCallDetails();
+      _getCurrentPosition();
+      _listenToCallChanges();
+    });
 
     _timeUpdateTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
       if (mounted) {
@@ -217,25 +221,41 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
 
   Future<void> _getCurrentPosition() async {
     try {
+      // 권한 확인
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('위치 권한이 거부되었습니다');
+          return;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('위치 권한이 영구적으로 거부되었습니다');
+        return;
       }
 
-      final position = await Geolocator.getCurrentPosition();
-      setState(() {
-        userPosition = position;
-
-        distanceToSite = Geolocator.distanceBetween(
-          position.latitude,
-          position.longitude,
-          widget.lat,
-          widget.lng,
-        );
-      });
+      // 낮은 정확도로 빠르게 위치 가져오기
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium, // high -> medium
+        timeLimit: const Duration(seconds: 5), // 시간 제한 추가
+      );
       
-      // 위치를 가져온 후 경로 미리보기 로드
-      _loadDirectionsPreview();
+      if (mounted) {
+        setState(() {
+          userPosition = position;
+          distanceToSite = Geolocator.distanceBetween(
+            position.latitude,
+            position.longitude,
+            widget.lat,
+            widget.lng,
+          );
+        });
+        
+        // 위치를 가져온 후 경로 미리보기 로드
+        _loadDirectionsPreview();
+      }
     } catch (e) {
       debugPrint('위치 정보를 가져오는데 실패했습니다: $e');
     }
@@ -699,10 +719,19 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
                     polylines: _polylines,
                     onMapCreated: (controller) {
                       mapController = controller;
-                      if (_directionsResult != null) {
-                        _updateCameraToShowRoute();
-                      }
+                      // 지도가 준비된 후 경로 표시
+                      Future.delayed(const Duration(milliseconds: 500), () {
+                        if (_directionsResult != null && mounted) {
+                          _updateCameraToShowRoute();
+                        }
+                      });
                     },
+                    // 성능 최적화 옵션
+                    compassEnabled: false,
+                    mapToolbarEnabled: false,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    liteModeEnabled: false, // lite mode 비활성화
                   ),
                   // 경로 정보 오버레이
                   if (_directionsResult != null && _showRoutePreview)
@@ -986,17 +1015,68 @@ class _CallDetailScreenState extends State<CallDetailScreen> {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Colors.blue[300]!),
           ),
-          child: Row(
+          child: Column(
             children: [
-              Icon(Icons.hourglass_empty, color: Colors.blue[700]),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '후보자로 등록됨 - 상황실 선택 대기중',
-                  style: TextStyle(
-                    color: Colors.blue[700],
-                    fontWeight: FontWeight.bold,
+              Row(
+                children: [
+                  Icon(Icons.hourglass_empty, color: Colors.blue[700]),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '후보자로 등록됨 - 상황실 선택 대기중',
+                      style: TextStyle(
+                        color: Colors.blue[700],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // 수락 취소 버튼 추가
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final shouldCancel = await showDialog<bool>(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text('⚠️ 수락 취소'),
+                        content: const Text('정말로 수락을 취소하시겠습니까?\n취소 후에는 AI 자동 선택에서도 제외됩니다.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(false),
+                            child: const Text('아니오'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.of(context).pop(true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                            ),
+                            child: const Text('취소하기'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                  
+                  if (shouldCancel == true) {
+                    final success = await ImprovedCallAcceptanceService.cancelCandidacy(widget.callId);
+                    if (success && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('수락이 취소되었습니다.'),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                      Navigator.of(context).pop();
+                    }
+                  }
+                },
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+                label: const Text('수락 취소'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
                 ),
               ),
             ],

@@ -8,6 +8,11 @@
   - 새 Claude 세션에서 가장 먼저 확인
   - 정기적으로 업데이트 필요
 
+- **PROJECT_STATUS_20250201.md** 🆕
+  - 2025년 2월 1일 현재 프로젝트 상태
+  - AI 시스템 구현 완료 내역
+  - 재난별 자격증 점수표
+
 - **CLAUDE_START.md** 
   - 새 Claude 세션 시작할 때 복사해서 사용
   - 간단한 프로젝트 요약
@@ -21,6 +26,11 @@
 - **docs/MULTI_CANDIDATE_QUICK_REF.md**
   - 다중 후보자 시스템 빠른 참조
   - 핵심 변경사항만 요약
+
+- **docs/AI_SELECTION_GUIDE.md** ⭐ NEW!
+  - AI 기반 대원 선택 시스템 가이드
+  - 점수 계산 방식, 자동 선택 기능
+  - UI/UX 개선사항 및 테스트 방법
 
 ### 3. 테스트 가이드
 - **TEST_GUIDE.md**
@@ -40,6 +50,10 @@
 - **IMPLEMENTATION_COMPLETE.md**
   - 2025.01.31 작업 완료 기록
   - 변경된 파일 목록
+
+- **AI_IMPLEMENTATION_COMPLETE.md**
+  - 2025.02.01 AI 시스템 구현 완료
+  - 생성/수정된 파일 목록
 
 - **DOCUMENT_GUIDE.md**
   - 문서 관리 가이드
@@ -78,3 +92,4 @@
 ---
 
 생성일: 2025년 1월 31일
+업데이트: 2025년 2월 1일 (오후 - 후보자 취소 및 AI 점수 개선)

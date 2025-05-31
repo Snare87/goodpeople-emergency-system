@@ -90,6 +90,9 @@ export const subscribeToCalls = (onDataChanged: CallsCallback): (() => void) => 
       console.log('[subscribeToCalls] Processed calls:', calls.map(c => ({
         id: c.id,
         eventType: c.eventType,
+        status: c.status,
+        candidatesCount: c.candidates ? Object.keys(c.candidates).length : 0,
+        candidateIds: c.candidates ? Object.keys(c.candidates) : [],
         hasLocation: !!c.location,
         location: c.location
       })));
@@ -216,7 +219,7 @@ export const completeCall = async (id: string): Promise<void> => {
       )
     );
     
-    console.log('[completeCall] 업데이트 성공');
+    console.log('[completeCall] 업데이트 성공 - candidates 유지');
   } catch (error) {
     console.error('[completeCall] 업데이트 실패:', error);
     throw error;
@@ -245,11 +248,11 @@ export const cancelCall = async (id: string): Promise<void> => {
         cancellationCount: currentCancellationCount + 1
       };
       
-      // 삭제할 필드들 (호출취소 시 모든 대원 정보 삭제)
+      // 삭제할 필드들 (candidates는 유지)
       delete updatedData.dispatchedAt;
       delete updatedData.acceptedAt;
       delete updatedData.selectedResponder;
-      delete updatedData.candidates;
+      // delete updatedData.candidates; // 후보자 목록은 유지
       
       return updatedData;
     }
@@ -284,12 +287,12 @@ export const reactivateCall = async (id: string): Promise<void> => {
       reactivationCount: currentReactivationCount + 1
     });
     
-    // 명시적으로 필드 삭제 (재호출 시 새로 시작)
+    // 명시적으로 필드 삭제 (재호출 시 새로 시작, candidates는 유지)
     const fieldsToRemove = [
       'completedAt',
       'acceptedAt',
-      'selectedResponder',
-      'candidates'  // 재호출 시 기존 후보자 목록 초기화
+      'selectedResponder'
+      // 'candidates'  // 재호출 시에도 후보자 목록 유지
     ];
     
     await Promise.all(

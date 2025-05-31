@@ -45,6 +45,7 @@ class ImprovedCallAcceptanceService {
         'position': userData['position'] ?? '대원',
         'rank': userData['rank'] ?? '소방사',
         'acceptedAt': DateTime.now().millisecondsSinceEpoch,
+        'certifications': userData['certifications'] ?? [], // 자격증 정보 추가
         
         // 경로 정보 (routeInfo 객체로 통일)
         'routeInfo': {
@@ -53,7 +54,7 @@ class ImprovedCallAcceptanceService {
           'duration': directionsResult?.totalDuration ?? (straightDistance / 50).round() * 60, // 초 단위로 통일
           'durationText': directionsResult?.durationText ?? '${(straightDistance / 50).round()}분',
           'calculatedAt': DateTime.now().millisecondsSinceEpoch,
-          'routeApiUsed': directionsResult != null ? 'google' : 'straight',
+          'routeApiUsed': directionsResult != null ? 'tmap_or_google' : 'straight', // 업데이트된 API 정보
         },
         
         // 현재 위치 (별도 필드로 유지)
@@ -208,6 +209,23 @@ class ImprovedCallAcceptanceService {
       }
     } catch (e) {
       debugPrint('[경로 업데이트] 오류: $e');
+    }
+  }
+  
+  // 후보자 취소
+  static Future<bool> cancelCandidacy(String callId) async {
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) return false;
+      
+      // 후보자 삭제
+      await _db.ref('calls/$callId/candidates/$userId').remove();
+      
+      debugPrint('[후보 취소] 성공 - Call: $callId, User: $userId');
+      return true;
+    } catch (e) {
+      debugPrint('[후보 취소] 오류: $e');
+      return false;
     }
   }
 }
